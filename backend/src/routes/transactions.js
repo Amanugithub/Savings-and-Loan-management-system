@@ -6,9 +6,7 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 
 const router = Router();
 
-export default router;
-
-// This is a list of allowed transaction types. Any transaction type not in this list will be rejected.
+// Transaction types allowed by the database CHECK constraint.
 const ALLOWED_TRANSACTION_TYPES = [
   "savings_deposit",
   "share_purchase",
@@ -107,3 +105,5 @@ router.post(
     return res.status(201).json(transaction);
   }),
 );
+
+export default router;
