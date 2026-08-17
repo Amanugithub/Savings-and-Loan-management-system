@@ -1,0 +1,29 @@
+{
+  "name": "sacco-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js",
+    "migrate:local": "node src/db/migrate-local.js",
+    "seed:local": "node src/db/seed.js",
+    "seed:admin": "node src/db/seed-admin.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^11.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true,
+    "bcrypt@6.0.0": true
+  }
+}
