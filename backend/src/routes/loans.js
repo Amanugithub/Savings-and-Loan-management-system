@@ -35,6 +35,19 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { member_id, status } = req.query;
+
+    // Validate that query parameters are scalar (not arrays)
+    if (Array.isArray(member_id)) {
+      return res.status(400).json({
+        error: 'member_id must be a single value, not an array',
+      });
+    }
+    if (Array.isArray(status)) {
+      return res.status(400).json({
+        error: 'status must be a single value, not an array',
+      });
+    }
+
     let query = 'SELECT * FROM loans';
     const conditions = [];
     const params = [];
@@ -215,7 +228,9 @@ router.patch(
       // Approving a loan disburses it. If no date is supplied, use today's date.
       // The DB's unique partial index will reject this if the guarantor
       // already backs another active loan; that surfaces as a 409.
-      const disbursementDate = disbursement_date ?? new Date().toISOString().slice(0, 10);
+      const disbursementDate = (disbursement_date && disbursement_date.trim())
+        ? disbursement_date.trim()
+        : new Date().toISOString().slice(0, 10);
       if (!isValidISODate(disbursementDate)) {
         return res.status(400).json({
           error: 'disbursement_date must be a valid date in YYYY-MM-DD format',
