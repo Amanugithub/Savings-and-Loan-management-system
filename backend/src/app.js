@@ -6,7 +6,7 @@ import membersRouter from './routes/members.js';
 import administratorsRouter from './routes/administrators.js';
 import authRouter from './routes/auth.js';
 import transactionsRouter from './routes/transactions.js';
-// import loansRouter from './routes/loans.js';
+import loansRouter from './routes/loans.js';
 // import expensesRouter from './routes/expenses.js';
 // import syncRouter from './routes/sync.js';
 
@@ -25,7 +25,7 @@ app.use('/api/members', membersRouter);
 app.use('/api/administrators', administratorsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/transactions', transactionsRouter);
-// app.use('/api/loans', loansRouter);
+app.use('/api/loans', loansRouter);
 // app.use('/api/expenses', expensesRouter);
 // app.use('/api/sync', syncRouter);
 
