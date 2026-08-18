@@ -19,6 +19,17 @@ const ALLOWED_TRANSACTION_TYPES = [
   "loan_insurance",
 ];
 
+function isValidISODate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth;
+}
+
 // POST /api/transactions — create a new transaction
 router.post(
   "/",
@@ -57,11 +68,13 @@ router.post(
     }
 
     if (loan_id) {
-      const loan = db.prepare("SELECT id FROM loans WHERE id = ?").get(loan_id);
+      const loan = db
+        .prepare("SELECT id FROM loans WHERE id = ? AND member_id = ?")
+        .get(loan_id, member_id);
 
       if (!loan) {
         return res.status(404).json({
-          error: "Loan not found",
+          error: "Loan not found for this member",
         });
       }
     }
@@ -69,6 +82,12 @@ router.post(
     const id = randomUUID();
 
     const transactionDate = date ?? new Date().toISOString().slice(0, 10);
+
+    if (!isValidISODate(transactionDate)) {
+      return res.status(400).json({
+        error: "Date must be a valid date in YYYY-MM-DD format",
+      });
+    }
 
     const recordedBy = req.admin.id;
 
