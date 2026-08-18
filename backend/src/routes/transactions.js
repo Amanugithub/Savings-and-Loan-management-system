@@ -81,7 +81,7 @@ router.post(
 
     const id = randomUUID();
 
-    const transactionDate = date ?? new Date().toISOString().slice(0, 10);
+    const transactionDate = date || new Date().toISOString().slice(0, 10);
 
     if (!isValidISODate(transactionDate)) {
       return res.status(400).json({
