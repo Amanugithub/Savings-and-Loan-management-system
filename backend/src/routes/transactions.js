@@ -96,7 +96,9 @@ router.post(
 
     const id = randomUUID();
 
-    const transactionDate = date ?? new Date().toISOString().slice(0, 10);
+    const transactionDate = (date && date.trim())
+      ? date.trim()
+      : new Date().toISOString().slice(0, 10);
 
     if (!isValidISODate(transactionDate)) {
       return res.status(400).json({
@@ -147,6 +149,18 @@ router.get(
   requireAuth,
   asyncHandler(async (req, res) => {
     const { member_id, loan_id, limit: requestedLimit, offset: requestedOffset } = req.query;
+
+    // Validate that query parameters are scalar (not arrays)
+    if (Array.isArray(member_id)) {
+      return res.status(400).json({
+        error: 'member_id must be a single value, not an array',
+      });
+    }
+    if (Array.isArray(loan_id)) {
+      return res.status(400).json({
+        error: 'loan_id must be a single value, not an array',
+      });
+    }
 
     const limitResult = requestedLimit === undefined
       ? { value: 50 }
