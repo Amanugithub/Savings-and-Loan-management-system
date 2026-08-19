@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
+router.use(requireAuth);
 
 // GET /api/members — list all members
 router.get(
