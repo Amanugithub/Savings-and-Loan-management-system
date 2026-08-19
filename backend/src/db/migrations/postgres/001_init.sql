@@ -42,7 +42,8 @@ CREATE TABLE administrators (
     password_hash   VARCHAR(255) NOT NULL,
     status          VARCHAR(20) NOT NULL DEFAULT 'active'
                         CHECK (status IN ('active', 'inactive')),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE loans (
@@ -63,6 +64,7 @@ CREATE TABLE loans (
     status                      VARCHAR(20) NOT NULL DEFAULT 'pending'
                                     CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_guarantor_not_self
         CHECK (guarantor_member_id IS NULL OR guarantor_member_id <> member_id)
 );
@@ -73,6 +75,10 @@ CREATE UNIQUE INDEX uq_guarantor_one_active_loan
     WHERE status = 'active' AND guarantor_member_id IS NOT NULL;
 
 CREATE INDEX idx_loans_member ON loans (member_id);
+
+CREATE UNIQUE INDEX uq_member_one_active_loan
+    ON loans (member_id)
+    WHERE status = 'active';
 
 CREATE TABLE transactions (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -107,7 +113,8 @@ CREATE TABLE transactions (
                       END
                   ) STORED,
     notes         VARCHAR(255),
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_transactions_member_date ON transactions (member_id, date);
@@ -134,7 +141,8 @@ CREATE TABLE expenses (
                       END
                   ) STORED,
     recorded_by   UUID NOT NULL REFERENCES administrators(id),
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Mirror of the local calculation -- populated by sync, not
@@ -151,6 +159,7 @@ CREATE TABLE dividend_history (
     savings_dividend  NUMERIC(12,2) NOT NULL DEFAULT 0,
     share_dividend    NUMERIC(12,2) NOT NULL DEFAULT 0,
     date_calculated   DATE NOT NULL DEFAULT CURRENT_DATE,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (member_id, fiscal_year)
 );
 
@@ -165,7 +174,8 @@ CREATE TABLE member_exits (
     shares_returned          NUMERIC(12,2) NOT NULL,
     dividend_owed            NUMERIC(12,2) NOT NULL,
     government_withholding   NUMERIC(12,2) NOT NULL,  -- 10% of dividend_owed
-    net_amount_paid          NUMERIC(12,2) NOT NULL
+    net_amount_paid          NUMERIC(12,2) NOT NULL,
+    updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- One row per recipient, even for broadcasts (e.g. a meeting
@@ -181,7 +191,8 @@ CREATE TABLE notifications (
                       'payment_due', 'meeting', 'news', 'loan_status'
                   )),
     is_read       BOOLEAN NOT NULL DEFAULT false,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_notifications_member_unread ON notifications (member_id) WHERE is_read = false;
