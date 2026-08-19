@@ -27,7 +27,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/transactions', transactionsRouter);
 app.use('/api/loans', loansRouter);
 // app.use('/api/expenses', expensesRouter);
-// app.use('/api/sync', syncRouter);
+app.use('/api/sync', syncRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
