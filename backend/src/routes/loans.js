@@ -222,10 +222,10 @@ router.patch(
       }
 
       db.prepare(
-        "UPDATE loans SET status = 'active', disbursement_date = ?, synced_at = NULL WHERE id = ?"
+        "UPDATE loans SET status = 'active', disbursement_date = ?, updated_at = datetime('now'), synced_at = NULL WHERE id = ?"
       ).run(disbursementDate, req.params.id);
     } else {
-      db.prepare('UPDATE loans SET status = ?, synced_at = NULL WHERE id = ?').run(status, req.params.id);
+      db.prepare("UPDATE loans SET status = ?, updated_at = datetime('now'), synced_at = NULL WHERE id = ?").run(status, req.params.id);
     }
 
     const updated = db.prepare('SELECT * FROM loans WHERE id = ?').get(req.params.id);
