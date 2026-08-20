@@ -7,7 +7,7 @@ import administratorsRouter from './routes/administrators.js';
 import authRouter from './routes/auth.js';
 import transactionsRouter from './routes/transactions.js';
 import loansRouter from './routes/loans.js';
-// import expensesRouter from './routes/expenses.js';
+import expensesRouter from './routes/expenses.js';
 // import syncRouter from './routes/sync.js';
 
 import { errorHandler } from './middleware/errorHandler.js';
