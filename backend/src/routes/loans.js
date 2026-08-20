@@ -29,14 +29,12 @@ function isValidISODate(value) {
   return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth;
 }
 
-// GET /api/loans — list, optionally filtered by member or status
 router.get(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
     const { member_id, status } = req.query;
 
-    // Validate that query parameters are scalar (not arrays)
     if (Array.isArray(member_id)) {
       return res.status(400).json({
         error: 'member_id must be a single value, not an array',
@@ -72,7 +70,6 @@ router.get(
   })
 );
 
-// GET /api/loans/:id
 router.get(
   '/:id',
   requireAuth,
@@ -83,15 +80,6 @@ router.get(
   })
 );
 
-// POST /api/loans — apply for a loan. Status starts as 'pending'.
-// monthly_installment, interest_rate, monthly_interest_amount, and
-// insurance_amount are calculated here (not trusted from the client) using
-// the approved term-based rate and formulas
-// documented in the schema:
-//   monthly_installment     = principal / (term_years * 12)
-//   interest_rate            = approved rate for the selected term
-//   monthly_interest_amount = (principal * interest_rate%) / (term_years * 12)
-//   insurance_amount        = 1% of principal, paid upfront
 router.post(
   '/',
   requireAuth,
@@ -166,9 +154,6 @@ router.post(
 
     const id = randomUUID();
 
-    // The DB's unique partial index (one active loan per guarantor)
-    // still guards this at the data level — this insert is 'pending',
-    // so it won't collide until the loan is approved to 'active'.
     db.prepare(
       `INSERT INTO loans
         (id, member_id, guarantor_member_id, type, principal_amount, term_years,
@@ -194,9 +179,6 @@ router.post(
   })
 );
 
-// PATCH /api/loans/:id/status — the only way to move a loan through
-// pending -> active/rejected -> closed. Keeps the state machine in
-// one place instead of letting a generic PATCH set status to anything.
 const ALLOWED_TRANSITIONS = {
   pending: ['active', 'rejected'],
   active: ['closed'],
@@ -225,12 +207,14 @@ router.patch(
         return res.status(409).json({ error: 'Member already has an active loan' });
       }
 
-      // Approving a loan disburses it. If no date is supplied, use today's date.
-      // The DB's unique partial index will reject this if the guarantor
-      // already backs another active loan; that surfaces as a 409.
-      const disbursementDate = (disbursement_date && disbursement_date.trim())
+      const disbursementDate = (typeof disbursement_date === 'string' && disbursement_date.trim())
         ? disbursement_date.trim()
         : new Date().toISOString().slice(0, 10);
+      if (disbursement_date !== undefined && typeof disbursement_date !== 'string') {
+        return res.status(400).json({
+          error: 'disbursement_date must be a string in YYYY-MM-DD format',
+        });
+      }
       if (!isValidISODate(disbursementDate)) {
         return res.status(400).json({
           error: 'disbursement_date must be a valid date in YYYY-MM-DD format',
@@ -238,10 +222,10 @@ router.patch(
       }
 
       db.prepare(
-        "UPDATE loans SET status = 'active', disbursement_date = ?, synced_at = NULL WHERE id = ?"
+        "UPDATE loans SET status = 'active', disbursement_date = ?, updated_at = datetime('now'), synced_at = NULL WHERE id = ?"
       ).run(disbursementDate, req.params.id);
     } else {
-      db.prepare('UPDATE loans SET status = ?, synced_at = NULL WHERE id = ?').run(status, req.params.id);
+      db.prepare("UPDATE loans SET status = ?, updated_at = datetime('now'), synced_at = NULL WHERE id = ?").run(status, req.params.id);
     }
 
     const updated = db.prepare('SELECT * FROM loans WHERE id = ?').get(req.params.id);

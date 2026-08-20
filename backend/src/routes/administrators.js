@@ -78,6 +78,7 @@ router.patch(
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    updates.push("updated_at = datetime('now')");
     updates.push('synced_at = NULL');
     values.push(req.params.id);
 
