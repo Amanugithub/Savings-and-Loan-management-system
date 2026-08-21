@@ -66,6 +66,7 @@ The system is designed for:
 
 * React
 * Tailwind CSS
+* React Native for mobile application
 
 **Backend**
 
@@ -88,8 +89,8 @@ savings-loan-management-system/
 ├── frontend/       # React application
 │
 ├── backend/        # Express.js API
-│
-├── database/       # Database schemas and migrations
+│   │
+│   │── db/       # Database schemas and migrations
 │
 └── README.md
 ```
