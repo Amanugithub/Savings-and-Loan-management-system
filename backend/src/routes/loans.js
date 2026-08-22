@@ -200,6 +200,16 @@ router.patch(
     }
 
     if (status === 'active') {
+      const member = db.prepare('SELECT status FROM members WHERE id = ?').get(loan.member_id);
+      if (!member || member.status !== 'active') {
+        return res.status(409).json({ error: 'Loans can only be activated for active members' });
+      }
+      if (loan.guarantor_member_id) {
+        const guarantor = db.prepare('SELECT status FROM members WHERE id = ?').get(loan.guarantor_member_id);
+        if (!guarantor || guarantor.status !== 'active') {
+          return res.status(409).json({ error: 'The guarantor must be an active member' });
+        }
+      }
       const activeLoan = db
         .prepare("SELECT id FROM loans WHERE member_id = ? AND status = 'active' AND id <> ?")
         .get(loan.member_id, req.params.id);
