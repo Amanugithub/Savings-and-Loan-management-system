@@ -82,7 +82,7 @@ CREATE UNIQUE INDEX uq_member_one_active_loan
 
 CREATE TABLE transactions (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    member_id     UUID NOT NULL REFERENCES members(id),
+    member_id     UUID REFERENCES members(id),
     loan_id       UUID REFERENCES loans(id),   -- NULL unless loan-related
     recorded_by   UUID NOT NULL REFERENCES administrators(id),
     type          VARCHAR(30) NOT NULL CHECK (type IN (
@@ -95,7 +95,8 @@ CREATE TABLE transactions (
                       'loan_installment',
                       'loan_interest',
                       'loan_insurance',
-                      'member_exit_payout'
+                      'member_exit_payout',
+                      'bank_interest_income'
                   )),
     amount        NUMERIC(12,2) NOT NULL CHECK (amount > 0 OR type = 'member_exit_payout'),
     date          DATE NOT NULL DEFAULT CURRENT_DATE,  -- Gregorian, source of truth
@@ -212,7 +213,8 @@ SELECT
     SUM(amount) FILTER (WHERE type = 'loan_installment') AS total_installments,
     SUM(amount) FILTER (WHERE type = 'loan_interest')    AS total_interest,
     SUM(amount) FILTER (WHERE type = 'penalty_payment')  AS total_penalties,
-    SUM(amount) FILTER (WHERE type <> 'member_exit_payout') AS total_collected,
-    SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts
+    SUM(amount) FILTER (WHERE type NOT IN ('member_exit_payout', 'bank_interest_income')) AS total_collected,
+    SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts,
+    SUM(amount) FILTER (WHERE type = 'bank_interest_income') AS total_bank_interest
 FROM transactions
 GROUP BY member_id, fiscal_year, fiscal_month;

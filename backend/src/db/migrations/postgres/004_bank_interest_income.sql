@@ -1,13 +1,12 @@
+ALTER TABLE transactions ALTER COLUMN member_id DROP NOT NULL;
+
 ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_type_check;
-ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_amount_check;
 ALTER TABLE transactions ADD CONSTRAINT transactions_type_check CHECK (type IN (
   'savings_deposit', 'share_purchase', 'penalty_payment',
   'registration_fee', 'card_fee', 'loan_disbursement',
   'loan_installment', 'loan_interest', 'loan_insurance',
-  'member_exit_payout'
+  'member_exit_payout', 'bank_interest_income'
 ));
-ALTER TABLE transactions ADD CONSTRAINT transactions_amount_check
-  CHECK (amount > 0 OR type = 'member_exit_payout');
 
 CREATE OR REPLACE VIEW monthly_summary AS
 SELECT
@@ -20,6 +19,7 @@ SELECT
     SUM(amount) FILTER (WHERE type = 'loan_interest') AS total_interest,
     SUM(amount) FILTER (WHERE type = 'penalty_payment') AS total_penalties,
     SUM(amount) FILTER (WHERE type NOT IN ('member_exit_payout', 'bank_interest_income')) AS total_collected,
-    SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts
+    SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts,
+    SUM(amount) FILTER (WHERE type = 'bank_interest_income') AS total_bank_interest
 FROM transactions
 GROUP BY member_id, fiscal_year, fiscal_month;

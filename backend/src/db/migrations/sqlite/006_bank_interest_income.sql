@@ -1,5 +1,5 @@
--- Add the ledger type used to record resignation payouts.
--- SQLite cannot alter a CHECK constraint in place, so rebuild the table.
+-- Organization-level bank interest has no member or loan. Make member_id
+-- nullable and add the ledger type while preserving existing transactions.
 PRAGMA foreign_keys = OFF;
 DROP VIEW monthly_summary;
 
@@ -29,7 +29,7 @@ CREATE TABLE transactions_new (
     notes         TEXT,
     synced_at    TEXT,
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT
+    updated_at   TEXT
 );
 
 INSERT INTO transactions_new (id, member_id, loan_id, recorded_by, type, amount, date, notes, synced_at, created_at, updated_at)

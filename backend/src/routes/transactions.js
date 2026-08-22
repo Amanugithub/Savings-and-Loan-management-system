@@ -18,6 +18,7 @@ const ALLOWED_TRANSACTION_TYPES = [
   "loan_interest",
   "loan_insurance",
   "member_exit_payout",
+  "bank_interest_income",
 ];
 
 function isValidISODate(value) {
@@ -53,9 +54,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const { member_id, loan_id, type, amount, date, notes } = req.body;
 
-    if (!member_id || !type || amount === undefined) {
+    if (!type || amount === undefined || (type !== "bank_interest_income" && !member_id)) {
       return res.status(400).json({
-        error: "member_id, type, and amount are required",
+        error: "type and amount are required; member_id is required for member transactions",
       });
     }
 
@@ -69,6 +70,10 @@ router.post(
       return res.status(400).json({ error: "member_exit_payout is created by the member exit process" });
     }
 
+    if (type === "bank_interest_income" && (member_id || loan_id)) {
+      return res.status(400).json({ error: "bank_interest_income is an organization-level transaction and cannot reference a member or loan" });
+    }
+
     const parsedAmount = Number(amount);
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
@@ -77,11 +82,11 @@ router.post(
       });
     }
 
-    const member = db
-      .prepare("SELECT id FROM members WHERE id = ?")
-      .get(member_id);
+    const member = member_id
+      ? db.prepare("SELECT id FROM members WHERE id = ?").get(member_id)
+      : null;
 
-    if (!member) {
+    if (member_id && !member) {
       return res.status(404).json({
         error: "Member not found",
       });
@@ -259,6 +264,7 @@ router.get(
       total_penalties: 0,
       total_collected: 0,
       total_payouts: 0,
+      total_bank_interest: 0,
     });
   })
 );

@@ -10,7 +10,14 @@ const SAVINGS_SHARE = 0.65;
 const SHARE_SHARE = 0.20;
 // Reserve is the remaining 0.15 — computed for reporting, never distributed.
 
-const REVENUE_TYPES = ['loan_interest', 'loan_insurance', 'penalty_payment', 'registration_fee', 'card_fee'];
+const REVENUE_TYPES = [
+  'loan_interest',
+  'loan_insurance',
+  'penalty_payment',
+  'registration_fee',
+  'card_fee',
+  'bank_interest_income',
+];
 
 function parseFiscalYear(value) {
   if (typeof value !== 'string' || !/^\d{1,4}$/.test(value)) {
