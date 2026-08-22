@@ -145,8 +145,10 @@ async function checkRemoteHealth() {
 
 async function pushTable({ name, columns, coerce }) {
   const table = SYNC_TABLES.find((candidate) => candidate.name === name);
-  const versionExpression = ['member_exits', 'dividend_history'].includes(name)
-    ? 'COALESCE(updated_at, date_calculated)'
+  const versionExpression = name === 'member_exits'
+    ? 'COALESCE(updated_at, exit_date)'
+    : name === 'dividend_history'
+      ? 'COALESCE(updated_at, date_calculated)'
     : 'COALESCE(updated_at, created_at)';
   const pendingRows = db
     .prepare(`SELECT * FROM ${name} WHERE synced_at IS NULL ORDER BY ${name === 'member_exits' ? 'exit_date' : 'created_at'} ASC, id ASC`)

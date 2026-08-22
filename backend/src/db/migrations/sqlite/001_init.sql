@@ -87,9 +87,10 @@ CREATE TABLE transactions (
                       'loan_disbursement',
                       'loan_installment',
                       'loan_interest',
-                      'loan_insurance'
+                      'loan_insurance',
+                      'member_exit_payout'
                   )),
-    amount        REAL NOT NULL CHECK (amount > 0),
+    amount        REAL NOT NULL CHECK (amount > 0 OR type = 'member_exit_payout'),
     date          TEXT NOT NULL DEFAULT (date('now')),  -- ISO date string, e.g. 2026-03-15
     -- SQLite has no EXTRACT(); strftime('%m', date) gives the month as text,
     -- so it's cast to INTEGER for the comparison. Same July-June fiscal
@@ -213,6 +214,7 @@ SELECT
     SUM(amount) FILTER (WHERE type = 'loan_installment') AS total_installments,
     SUM(amount) FILTER (WHERE type = 'loan_interest')    AS total_interest,
     SUM(amount) FILTER (WHERE type = 'penalty_payment')  AS total_penalties,
-    SUM(amount)                                          AS total_collected
+    SUM(amount) FILTER (WHERE type <> 'member_exit_payout') AS total_collected,
+    SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts
 FROM transactions
 GROUP BY member_id, fiscal_year, fiscal_month;

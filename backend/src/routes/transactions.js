@@ -17,6 +17,7 @@ const ALLOWED_TRANSACTION_TYPES = [
   "loan_installment",
   "loan_interest",
   "loan_insurance",
+  "member_exit_payout",
 ];
 
 function isValidISODate(value) {
@@ -62,6 +63,10 @@ router.post(
       return res.status(400).json({
         error: "Invalid transaction type",
       });
+    }
+
+    if (type === "member_exit_payout") {
+      return res.status(400).json({ error: "member_exit_payout is created by the member exit process" });
     }
 
     const parsedAmount = Number(amount);
@@ -253,6 +258,7 @@ router.get(
       total_interest: 0,
       total_penalties: 0,
       total_collected: 0,
+      total_payouts: 0,
     });
   })
 );

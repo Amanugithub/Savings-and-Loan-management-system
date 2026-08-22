@@ -94,9 +94,10 @@ CREATE TABLE transactions (
                       'loan_disbursement',
                       'loan_installment',
                       'loan_interest',
-                      'loan_insurance'
+                      'loan_insurance',
+                      'member_exit_payout'
                   )),
-    amount        NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    amount        NUMERIC(12,2) NOT NULL CHECK (amount > 0 OR type = 'member_exit_payout'),
     date          DATE NOT NULL DEFAULT CURRENT_DATE,  -- Gregorian, source of truth
     -- Fiscal year runs July 1 - June 30 (fixed Gregorian offset; the org
     -- does not track Pagume, so a plain 12-month scheme is used).
@@ -211,6 +212,7 @@ SELECT
     SUM(amount) FILTER (WHERE type = 'loan_installment') AS total_installments,
     SUM(amount) FILTER (WHERE type = 'loan_interest')    AS total_interest,
     SUM(amount) FILTER (WHERE type = 'penalty_payment')  AS total_penalties,
-    SUM(amount)                                          AS total_collected
+    SUM(amount) FILTER (WHERE type <> 'member_exit_payout') AS total_collected,
+    SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts
 FROM transactions
 GROUP BY member_id, fiscal_year, fiscal_month;

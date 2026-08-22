@@ -6,6 +6,13 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
+function isValidISODate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth;
+}
+
 router.use(requireAuth);
 
 // GET /api/member-exits — list, optionally filtered by member
@@ -47,74 +54,74 @@ router.post(
       return res.status(400).json({ error: 'member_id is required' });
     }
 
-    const member = db.prepare('SELECT id, status FROM members WHERE id = ?').get(member_id);
-    if (!member) return res.status(400).json({ error: 'member_id does not reference an existing member' });
-    if (member.status === 'exited') {
-      return res.status(409).json({ error: 'This member has already exited' });
+    const today = new Date().toISOString().slice(0, 10);
+    const exitDate = exit_date === undefined ? today : exit_date;
+    if (!isValidISODate(exitDate) || exitDate > today) {
+      return res.status(400).json({ error: 'exit_date must be a valid date no later than today' });
     }
-
-    const alreadyExited = db.prepare('SELECT id FROM member_exits WHERE member_id = ?').get(member_id);
-    if (alreadyExited) {
-      return res.status(409).json({ error: 'An exit record already exists for this member' });
-    }
-
-    // Block on an active loan as BORROWER — the debt must be settled
-    // before the co-op pays out their savings/shares/dividends.
-    const activeLoanAsBorrower = db
-      .prepare("SELECT id FROM loans WHERE member_id = ? AND status = 'active'")
-      .get(member_id);
-    if (activeLoanAsBorrower) {
-      return res.status(409).json({ error: 'Member has an active loan and cannot exit until it is closed' });
-    }
-
-    // Block on being an active GUARANTOR elsewhere — their exit would
-    // leave that other loan without valid collateral.
-    const activeAsGuarantor = db
-      .prepare("SELECT id FROM loans WHERE guarantor_member_id = ? AND status = 'active'")
-      .get(member_id);
-    if (activeAsGuarantor) {
-      return res.status(409).json({
-        error: 'Member is the guarantor on another active loan and cannot exit until that loan is closed',
-      });
-    }
-
-    const savingsReturned = db
-      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'savings_deposit' AND member_id = ?")
-      .get(member_id).total;
-    const sharesReturned = db
-      .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'share_purchase' AND member_id = ?")
-      .get(member_id).total;
-
-    // Dividends accumulate in dividend_history across every fiscal year
-    // rather than being paid out annually (there's no dividend-payout
-    // transaction type) — so this sums the member's ENTIRE dividend
-    // history, not just the most recent year.
-    const dividendOwed = db
-      .prepare(
-        `SELECT COALESCE(SUM(savings_dividend + share_dividend), 0) AS total
-         FROM dividend_history WHERE member_id = ?`
-      )
-      .get(member_id).total;
-
-    const round2 = (n) => Math.round(n * 100) / 100;
-    const governmentWithholding = round2(dividendOwed * 0.10);
-    const netAmountPaid = round2(savingsReturned + sharesReturned + dividendOwed - governmentWithholding);
-
-    const id = randomUUID();
-    const exitDate = exit_date ?? new Date().toISOString().slice(0, 10);
 
     const processExit = db.transaction(() => {
+      const member = db.prepare('SELECT id, status FROM members WHERE id = ?').get(member_id);
+      if (!member) return { error: { status: 400, message: 'member_id does not reference an existing member' } };
+      if (member.status === 'exited') return { error: { status: 409, message: 'This member has already exited' } };
+
+      const alreadyExited = db.prepare('SELECT id FROM member_exits WHERE member_id = ?').get(member_id);
+      if (alreadyExited) return { error: { status: 409, message: 'An exit record already exists for this member' } };
+
+      const activeLoanAsBorrower = db
+        .prepare("SELECT id FROM loans WHERE member_id = ? AND status = 'active'")
+        .get(member_id);
+      if (activeLoanAsBorrower) {
+        return { error: { status: 409, message: 'Member has an active loan and cannot exit until it is closed' } };
+      }
+
+      const activeAsGuarantor = db
+        .prepare("SELECT id FROM loans WHERE guarantor_member_id = ? AND status = 'active'")
+        .get(member_id);
+      if (activeAsGuarantor) {
+        return { error: { status: 409, message: 'Member is the guarantor on another active loan and cannot exit until that loan is closed' } };
+      }
+
+      const savingsReturned = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'savings_deposit' AND member_id = ? AND date <= ?")
+        .get(member_id, exitDate).total;
+      const sharesReturned = db
+        .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'share_purchase' AND member_id = ? AND date <= ?")
+        .get(member_id, exitDate).total;
+      const dividendOwed = db
+        .prepare(
+          `SELECT COALESCE(SUM(savings_dividend + share_dividend), 0) AS total
+           FROM dividend_history WHERE member_id = ? AND date_calculated <= ?`
+        )
+        .get(member_id, exitDate).total;
+
+      const round2 = (n) => Math.round(n * 100) / 100;
+      const governmentWithholding = round2(dividendOwed * 0.10);
+      const netAmountPaid = round2(savingsReturned + sharesReturned + dividendOwed - governmentWithholding);
+      const id = randomUUID();
+
       db.prepare(
         `INSERT INTO member_exits
           (id, member_id, exit_date, savings_returned, shares_returned, dividend_owed, government_withholding, net_amount_paid, synced_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`
       ).run(id, member_id, exitDate, savingsReturned, sharesReturned, dividendOwed, governmentWithholding, netAmountPaid);
 
-      db.prepare("UPDATE members SET status = 'exited', updated_at = datetime('now'), synced_at = NULL WHERE id = ?").run(member_id);
-    });
-    processExit();
+      db.prepare(
+        `INSERT INTO transactions
+          (id, member_id, recorded_by, type, amount, date, notes, synced_at)
+         VALUES (?, ?, ?, 'member_exit_payout', ?, ?, ?, NULL)`
+      ).run(
+        randomUUID(), member_id, req.admin.id, netAmountPaid, exitDate,
+        `Member exit ${id}; savings=${savingsReturned}; shares=${sharesReturned}; dividends=${dividendOwed}; withholding=${governmentWithholding}`
+      );
 
-    const record = db.prepare('SELECT * FROM member_exits WHERE id = ?').get(id);
+      db.prepare("UPDATE members SET status = 'exited', updated_at = datetime('now'), synced_at = NULL WHERE id = ?").run(member_id);
+      return { id };
+    });
+    const result = processExit();
+    if (result.error) return res.status(result.error.status).json({ error: result.error.message });
+
+    const record = db.prepare('SELECT * FROM member_exits WHERE id = ?').get(result.id);
     res.status(201).json(record);
   })
 );
