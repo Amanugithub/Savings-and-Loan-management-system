@@ -11,6 +11,7 @@ import syncRouter from './routes/sync.js';
 import expensesRouter from './routes/expenses.js';
 import dividendHistoryRouter from './routes/dividend-history.js';
 import memberExitsRouter from './routes/member-exits.js';
+import notificationsRouter from './routes/notifications.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -31,6 +32,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api/expenses', expensesRouter);
 app.use('/api/dividend-history', dividendHistoryRouter);
 app.use('/api/member-exits', memberExitsRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
