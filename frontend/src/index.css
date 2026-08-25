@@ -133,6 +133,16 @@ body {
   box-sizing: border-box;
 }
 
+#root {
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  margin: 0;
+  border: 0;
+  display: block;
+  text-align: left;
+}
+
 h1,
 h2 {
   font-family: var(--heading);
@@ -261,3 +271,11 @@ code {
     @apply bg-background text-foreground;}
   html {
     @apply font-sans;}}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
