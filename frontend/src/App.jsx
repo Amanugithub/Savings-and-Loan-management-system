@@ -4,6 +4,7 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute"
 import AppShell from "@/components/layout/AppShell"
 import AdministratorsPage from "@/pages/AdministratorsPage"
 import DashboardPage from "@/pages/DashboardPage"
+import DividendsPage from "@/pages/DividendsPage"
 import ExpenseDetailPage from "@/pages/ExpenseDetailPage"
 import ExpenseFormPage from "@/pages/ExpenseFormPage"
 import ExpensesPage from "@/pages/ExpensesPage"
@@ -48,6 +49,7 @@ function App() {
             <Route path="expenses" element={<ExpensesPage />} />
             <Route path="expenses/new" element={<ExpenseFormPage />} />
             <Route path="expenses/:id" element={<ExpenseDetailPage />} />
+            <Route path="dividends" element={<DividendsPage />} />
             <Route path="administrators" element={<AdministratorsPage />} />
             <Route path="*" element={<ModulePlaceholder />} />
           </Route>
