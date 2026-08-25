@@ -4,6 +4,9 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute"
 import AppShell from "@/components/layout/AppShell"
 import AdministratorsPage from "@/pages/AdministratorsPage"
 import DashboardPage from "@/pages/DashboardPage"
+import ExpenseDetailPage from "@/pages/ExpenseDetailPage"
+import ExpenseFormPage from "@/pages/ExpenseFormPage"
+import ExpensesPage from "@/pages/ExpensesPage"
 import LoginPage from "@/pages/LoginPage"
 import LoanDetailPage from "@/pages/LoanDetailPage"
 import LoanFormPage from "@/pages/LoanFormPage"
@@ -42,6 +45,9 @@ function App() {
             <Route path="loans" element={<LoansPage />} />
             <Route path="loans/new" element={<LoanFormPage />} />
             <Route path="loans/:id" element={<LoanDetailPage />} />
+            <Route path="expenses" element={<ExpensesPage />} />
+            <Route path="expenses/new" element={<ExpenseFormPage />} />
+            <Route path="expenses/:id" element={<ExpenseDetailPage />} />
             <Route path="administrators" element={<AdministratorsPage />} />
             <Route path="*" element={<ModulePlaceholder />} />
           </Route>
