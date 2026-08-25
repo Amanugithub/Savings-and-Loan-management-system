@@ -17,6 +17,7 @@ import MemberExitDetailPage from "@/pages/MemberExitDetailPage"
 import MemberExitsPage from "@/pages/MemberExitsPage"
 import MemberFormPage from "@/pages/MemberFormPage"
 import MembersPage from "@/pages/MembersPage"
+import NotificationsPage from "@/pages/NotificationsPage"
 import TransactionFormPage from "@/pages/TransactionFormPage"
 import TransactionSummaryPage from "@/pages/TransactionSummaryPage"
 import TransactionsPage from "@/pages/TransactionsPage"
@@ -54,6 +55,7 @@ function App() {
             <Route path="expenses/new" element={<ExpenseFormPage />} />
             <Route path="expenses/:id" element={<ExpenseDetailPage />} />
             <Route path="dividends" element={<DividendsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
             <Route path="administrators" element={<AdministratorsPage />} />
             <Route path="*" element={<ModulePlaceholder />} />
           </Route>
