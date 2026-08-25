@@ -8,6 +8,9 @@ import LoginPage from "@/pages/LoginPage"
 import MemberDetailPage from "@/pages/MemberDetailPage"
 import MemberFormPage from "@/pages/MemberFormPage"
 import MembersPage from "@/pages/MembersPage"
+import TransactionFormPage from "@/pages/TransactionFormPage"
+import TransactionSummaryPage from "@/pages/TransactionSummaryPage"
+import TransactionsPage from "@/pages/TransactionsPage"
 
 function ModulePlaceholder() {
   return (
@@ -30,6 +33,9 @@ function App() {
             <Route path="members/new" element={<MemberFormPage />} />
             <Route path="members/:id/edit" element={<MemberFormPage />} />
             <Route path="members/:id" element={<MemberDetailPage />} />
+            <Route path="transactions" element={<TransactionsPage />} />
+            <Route path="transactions/new" element={<TransactionFormPage />} />
+            <Route path="transactions/summary" element={<TransactionSummaryPage />} />
             <Route path="administrators" element={<AdministratorsPage />} />
             <Route path="*" element={<ModulePlaceholder />} />
           </Route>
