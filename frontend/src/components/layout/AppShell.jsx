@@ -4,6 +4,7 @@ import {
   Building2,
   ChevronDown,
   CircleDollarSign,
+  DoorOpen,
   FileBarChart,
   LayoutDashboard,
   LogOut,
@@ -57,6 +58,7 @@ const navigationGroups = [
       { label: "Loans", href: "/loans", icon: BriefcaseBusiness },
       { label: "Transactions", href: "/transactions", icon: WalletCards },
       { label: "Expenses", href: "/expenses", icon: CircleDollarSign },
+      { label: "Member exits", href: "/member-exits", icon: DoorOpen },
     ],
   },
   {

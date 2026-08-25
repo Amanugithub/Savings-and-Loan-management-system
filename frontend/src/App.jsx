@@ -13,6 +13,8 @@ import LoanDetailPage from "@/pages/LoanDetailPage"
 import LoanFormPage from "@/pages/LoanFormPage"
 import LoansPage from "@/pages/LoansPage"
 import MemberDetailPage from "@/pages/MemberDetailPage"
+import MemberExitDetailPage from "@/pages/MemberExitDetailPage"
+import MemberExitsPage from "@/pages/MemberExitsPage"
 import MemberFormPage from "@/pages/MemberFormPage"
 import MembersPage from "@/pages/MembersPage"
 import TransactionFormPage from "@/pages/TransactionFormPage"
@@ -40,6 +42,8 @@ function App() {
             <Route path="members/new" element={<MemberFormPage />} />
             <Route path="members/:id/edit" element={<MemberFormPage />} />
             <Route path="members/:id" element={<MemberDetailPage />} />
+            <Route path="member-exits" element={<MemberExitsPage />} />
+            <Route path="member-exits/:id" element={<MemberExitDetailPage />} />
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="transactions/new" element={<TransactionFormPage />} />
             <Route path="transactions/summary" element={<TransactionSummaryPage />} />

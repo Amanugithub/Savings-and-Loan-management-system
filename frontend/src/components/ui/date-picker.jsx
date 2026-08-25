@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
-function DatePicker({ value, onChange, placeholder = "Pick a date", className, "aria-label": ariaLabel }) {
+function DatePicker({ value, onChange, placeholder = "Pick a date", className, calendarDisabled, "aria-label": ariaLabel }) {
   const [open, setOpen] = useState(false)
   const selectedDate = value ? parseISO(value) : undefined
   const validDate = selectedDate && isValid(selectedDate) ? selectedDate : undefined
@@ -18,7 +18,7 @@ function DatePicker({ value, onChange, placeholder = "Pick a date", className, "
         {validDate ? format(validDate, "MMM d, yyyy") : placeholder}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto p-0">
-        <Calendar className="rounded-2xl border" mode="single" selected={validDate} onSelect={(date) => { if (date) { onChange(format(date, "yyyy-MM-dd")); setOpen(false) } }} />
+        <Calendar className="rounded-2xl border" mode="single" selected={validDate} disabled={calendarDisabled} onSelect={(date) => { if (date) { onChange(format(date, "yyyy-MM-dd")); setOpen(false) } }} />
       </PopoverContent>
     </Popover>
   )
