@@ -5,6 +5,9 @@ import AppShell from "@/components/layout/AppShell"
 import AdministratorsPage from "@/pages/AdministratorsPage"
 import DashboardPage from "@/pages/DashboardPage"
 import LoginPage from "@/pages/LoginPage"
+import LoanDetailPage from "@/pages/LoanDetailPage"
+import LoanFormPage from "@/pages/LoanFormPage"
+import LoansPage from "@/pages/LoansPage"
 import MemberDetailPage from "@/pages/MemberDetailPage"
 import MemberFormPage from "@/pages/MemberFormPage"
 import MembersPage from "@/pages/MembersPage"
@@ -36,6 +39,9 @@ function App() {
             <Route path="transactions" element={<TransactionsPage />} />
             <Route path="transactions/new" element={<TransactionFormPage />} />
             <Route path="transactions/summary" element={<TransactionSummaryPage />} />
+            <Route path="loans" element={<LoansPage />} />
+            <Route path="loans/new" element={<LoanFormPage />} />
+            <Route path="loans/:id" element={<LoanDetailPage />} />
             <Route path="administrators" element={<AdministratorsPage />} />
             <Route path="*" element={<ModulePlaceholder />} />
           </Route>

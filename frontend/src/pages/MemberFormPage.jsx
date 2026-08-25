@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCreateMember, useMember, useUpdateMember } from "@/hooks/use-members"
@@ -41,7 +42,7 @@ function MemberForm({ member }) {
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="id_card_number">ID card number<Input id="id_card_number" name="id_card_number" value={form.id_card_number} onChange={updateField} /></label>
         <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2" htmlFor="address">Address<Input id="address" name="address" value={form.address} onChange={updateField} /></label>
         <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2" htmlFor="heir_info">Heir information<Input id="heir_info" name="heir_info" value={form.heir_info} onChange={updateField} /></label>
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="date_joined">Date joined<Input id="date_joined" name="date_joined" type="date" value={form.date_joined} onChange={updateField} /></label>
+        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="date_joined">Date joined<DatePicker value={form.date_joined} onChange={(date_joined) => setForm((current) => ({ ...current, date_joined }))} placeholder="Select join date" aria-label="Date joined" /></label>
       </div>
       {mutation.error && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{mutation.error.message}</p>}
       <div className="flex justify-end gap-3"><Button type="button" variant="outline" render={<Link to={isEditing ? `/members/${member.id}` : "/members"} />}>Cancel</Button><Button type="submit" disabled={mutation.isPending}><Save data-icon="inline-start" />{mutation.isPending ? "Saving…" : "Save member"}</Button></div>
