@@ -144,7 +144,7 @@ function AppShell() {
           <Button variant="ghost" size="icon" className="rounded-full text-muted-foreground hover:text-foreground" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
             {theme === "dark" ? <Sun /> : <Moon />}
           </Button>
-          <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground" aria-label="Notifications">
+          <Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground" render={<NavLink to="/notifications" />} aria-label="Notifications">
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>

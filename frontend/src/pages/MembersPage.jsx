@@ -4,9 +4,11 @@ import { ArrowUpRight, Search, UserPlus, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useMembers } from "@/hooks/use-members"
 
 function MembersPage() {
@@ -39,15 +41,15 @@ function MembersPage() {
           <div><CardTitle>Member directory</CardTitle><CardDescription className="mt-1">{filteredMembers.length} of {members.length} members shown.</CardDescription></div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="relative min-w-64"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or phone" className="pl-9" aria-label="Search members" /></div>
-            <div className="flex gap-1 rounded-xl bg-muted p-1" aria-label="Filter by member status">
-              {["all", "active", "exited"].map((option) => <Button key={option} type="button" size="sm" variant={status === option ? "default" : "ghost"} onClick={() => setStatus(option)}>{option[0].toUpperCase() + option.slice(1)}</Button>)}
-            </div>
+            <ToggleGroup value={[status]} onValueChange={(value) => setStatus(value[0] || "all")} aria-label="Filter by member status">
+              {["all", "active", "exited"].map((option) => <ToggleGroupItem key={option} value={option}>{option[0].toUpperCase() + option.slice(1)}</ToggleGroupItem>)}
+            </ToggleGroup>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           {isLoading && <p className="p-6 text-sm text-muted-foreground">Loading members…</p>}
           {error && <p className="p-6 text-sm text-destructive">{error.status === 401 ? "Sign in to view members." : error.message}</p>}
-          {!isLoading && !error && filteredMembers.length === 0 && <div className="flex flex-col items-center gap-3 p-12 text-center"><Users className="text-muted-foreground" /><p className="text-sm text-muted-foreground">No members match the current filters.</p></div>}
+          {!isLoading && !error && filteredMembers.length === 0 && <Empty className="m-6"><EmptyMedia><Users /></EmptyMedia><EmptyTitle>No members found</EmptyTitle><EmptyDescription>No members match the current filters.</EmptyDescription></Empty>}
           {!isLoading && !error && filteredMembers.length > 0 && <Table>
             <TableHeader><TableRow><TableHead>Member</TableHead><TableHead>Phone</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead><TableHead className="w-12"><span className="sr-only">Open</span></TableHead></TableRow></TableHeader>
             <TableBody>{filteredMembers.map((member) => <TableRow key={member.id}>
