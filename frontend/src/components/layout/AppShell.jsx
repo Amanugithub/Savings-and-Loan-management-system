@@ -88,7 +88,7 @@ function AppShell() {
               <Building2 />
             </div>
             <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="font-heading font-semibold">Amanuel SACCO</span>
+              <span className="font-heading font-semibold">Tokuma Misomaf</span>
               <span className="text-xs text-sidebar-foreground/65">Management portal</span>
             </div>
           </NavLink>
