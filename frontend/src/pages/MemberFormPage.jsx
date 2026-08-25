@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { AlertDialog } from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
@@ -23,13 +24,16 @@ function MemberForm({ member }) {
   const createMutation = useCreateMember()
   const updateMutation = useUpdateMember()
   const mutation = isEditing ? updateMutation : createMutation
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const updateField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
   const submit = (event) => {
     event.preventDefault()
     const payload = { ...form, age: form.age ? Number(form.age) : null }
-    mutation.mutate(isEditing ? { id: member.id, ...payload } : payload, { onSuccess: (saved) => navigate(`/members/${saved.id}`) })
+    if (!isEditing) { setConfirmOpen(true); return }
+    mutation.mutate({ id: member.id, ...payload }, { onSuccess: (saved) => navigate(`/members/${saved.id}`) })
   }
+  const confirmCreate = () => { setConfirmOpen(false); mutation.mutate({ ...form, age: form.age ? Number(form.age) : null }, { onSuccess: (saved) => navigate(`/members/${saved.id}`) }) }
 
   return <main className="mx-auto flex w-full max-w-4xl flex-col gap-8">
     <section><Button variant="ghost" render={<Link to={isEditing ? `/members/${member.id}` : "/members"} />} className="mb-4 -ml-3"><ArrowLeft data-icon="inline-start" /> Back to members</Button><Badge variant="secondary" className="mb-3">{isEditing ? "Member update" : "Registration"}</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">{isEditing ? "Edit member" : "Register a member"}</h1><p className="mt-2 text-muted-foreground">{isEditing ? "Keep this member’s information accurate and up to date." : "Add a new member to the cooperative directory."}</p></section>
@@ -47,6 +51,7 @@ function MemberForm({ member }) {
       {mutation.error && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{mutation.error.message}</p>}
       <div className="flex justify-end gap-3"><Button type="button" variant="outline" render={<Link to={isEditing ? `/members/${member.id}` : "/members"} />}>Cancel</Button><Button type="submit" disabled={mutation.isPending}><Save data-icon="inline-start" />{mutation.isPending ? "Saving…" : "Save member"}</Button></div>
     </form></CardContent></Card>
+    <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen} title="Create this member?" description={`This will register ${form.name || "this person"} in the cooperative directory.`} confirmLabel="Create member" onConfirm={confirmCreate} disabled={mutation.isPending} />
   </main>
 }
 
