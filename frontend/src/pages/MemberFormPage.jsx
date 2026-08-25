@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCreateMember, useMember, useUpdateMember } from "@/hooks/use-members"
 
 const emptyForm = { name: "", gender: "male", address: "", age: "", heir_info: "", id_card_number: "", phone_number: "", date_joined: "" }
@@ -34,7 +35,7 @@ function MemberForm({ member }) {
     <Card><CardHeader><CardTitle>Member information</CardTitle><CardDescription>Fields marked required must be completed before saving.</CardDescription></CardHeader><CardContent><form onSubmit={submit} className="flex flex-col gap-6">
       <div className="grid gap-4 md:grid-cols-2">
         <label className="flex flex-col gap-2 text-sm font-medium md:col-span-2" htmlFor="name">Full name<Input id="name" name="name" value={form.name} onChange={updateField} required /></label>
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="gender">Gender<select id="gender" name="gender" value={form.gender} onChange={updateField} className="h-9 rounded-4xl border border-input bg-input/30 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"><option value="male">Male</option><option value="female">Female</option></select></label>
+        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="gender">Gender<Select value={form.gender} onValueChange={(value) => setForm((current) => ({ ...current, gender: value }))}><SelectTrigger id="gender" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="male">Male</SelectItem><SelectItem value="female">Female</SelectItem></SelectGroup></SelectContent></Select></label>
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="age">Age<Input id="age" name="age" type="number" min="1" value={form.age} onChange={updateField} /></label>
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="phone_number">Phone number<Input id="phone_number" name="phone_number" value={form.phone_number} onChange={updateField} required /></label>
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="id_card_number">ID card number<Input id="id_card_number" name="id_card_number" value={form.id_card_number} onChange={updateField} /></label>
