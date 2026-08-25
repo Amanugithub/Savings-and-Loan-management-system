@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
   Moon,
+  RefreshCw,
   Settings,
   Sun,
   Users,
@@ -66,6 +67,7 @@ const navigationGroups = [
     items: [
       { label: "Dividends", href: "/dividends", icon: FileBarChart },
       { label: "Notifications", href: "/notifications", icon: Bell },
+      { label: "Synchronization", href: "/sync", icon: RefreshCw },
       { label: "Administrators", href: "/administrators", icon: Building2 },
     ],
   },
