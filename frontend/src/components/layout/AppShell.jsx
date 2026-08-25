@@ -15,18 +15,11 @@ import {
   Users,
   WalletCards,
 } from "lucide-react"
-import { NavLink, Outlet, useLocation } from "react-router-dom"
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Sidebar,
   SidebarContent,
@@ -75,6 +68,7 @@ const navigationGroups = [
 
 function AppShell() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const { admin, logout } = useAuth()
 
@@ -148,27 +142,40 @@ function AppShell() {
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Popover>
+            <PopoverTrigger render={<Button variant="ghost" size="sm" className="rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
               <Avatar size="sm">
                 <AvatarFallback>AD</AvatarFallback>
               </Avatar>
               <span className="hidden text-sm font-medium sm:block">{admin?.name || "Admin"}</span>
               <ChevronDown className="hidden text-muted-foreground sm:block" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem render={<NavLink to="/settings" />}>
-                <Settings />
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={logout}>
-                <LogOut />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64">
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarFallback>AD</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{admin?.name || "Admin"}</p>
+                  <p className="truncate text-xs text-muted-foreground">Administrator account</p>
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Button variant="outline" className="justify-start" onClick={() => navigate("/settings")}>
+                  <Settings data-icon="inline-start" />
+                  Settings
+                </Button>
+                <Button variant="outline" className="justify-start" onClick={logout}>
+                  <LogOut data-icon="inline-start" />
+                  Sign out
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button variant="outline" size="sm" onClick={logout}>
+            <LogOut data-icon="inline-start" />
+            <span className="hidden sm:inline">Sign out</span>
+          </Button>
         </header>
         <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:p-8">
           <Outlet />
