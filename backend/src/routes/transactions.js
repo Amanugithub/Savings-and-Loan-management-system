@@ -152,13 +152,21 @@ router.post(
   }),
 );
 
-// GET /api/transactions — list, optionally filtered by member or loan
+// GET /api/transactions — list, optionally filtered by member, loan, type, or date range
 
 router.get(
   '/',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { member_id, loan_id, limit: requestedLimit, offset: requestedOffset } = req.query;
+    const {
+      member_id,
+      loan_id,
+      type,
+      date_from: dateFrom,
+      date_to: dateTo,
+      limit: requestedLimit,
+      offset: requestedOffset,
+    } = req.query;
 
     // Validate that query parameters are scalar (not arrays)
     if (Array.isArray(member_id)) {
@@ -170,6 +178,24 @@ router.get(
       return res.status(400).json({
         error: 'loan_id must be a single value, not an array',
       });
+    }
+    for (const [name, value] of [['type', type], ['date_from', dateFrom], ['date_to', dateTo]]) {
+      if (Array.isArray(value)) {
+        return res.status(400).json({ error: `${name} must be a single value, not an array` });
+      }
+    }
+
+    if (type && !ALLOWED_TRANSACTION_TYPES.includes(type)) {
+      return res.status(400).json({ error: 'Invalid transaction type' });
+    }
+    if (dateFrom && !isValidISODate(dateFrom)) {
+      return res.status(400).json({ error: 'date_from must be a valid date in YYYY-MM-DD format' });
+    }
+    if (dateTo && !isValidISODate(dateTo)) {
+      return res.status(400).json({ error: 'date_to must be a valid date in YYYY-MM-DD format' });
+    }
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      return res.status(400).json({ error: 'date_from must be on or before date_to' });
     }
 
     const limitResult = requestedLimit === undefined
@@ -199,6 +225,18 @@ router.get(
     if (loan_id) {
       conditions.push('loan_id = ?');
       params.push(loan_id);
+    }
+    if (type) {
+      conditions.push('type = ?');
+      params.push(type);
+    }
+    if (dateFrom) {
+      conditions.push('date >= ?');
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      conditions.push('date <= ?');
+      params.push(dateTo);
     }
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');

@@ -65,6 +65,23 @@ router.get(
   })
 );
 
+// POST /api/notifications/broadcast/preview — validate a broadcast and return
+// the recipient count without creating notification rows.
+router.post(
+  '/broadcast/preview',
+  asyncHandler(async (req, res) => {
+    const validationError = validateNotificationBody(req.body);
+    if (validationError) return res.status(400).json({ error: validationError });
+
+    if (req.body?.loan_id) {
+      return res.status(400).json({ error: 'loan_id cannot be used with broadcast notifications' });
+    }
+
+    const recipients = db.prepare("SELECT COUNT(*) AS count FROM members WHERE status = 'active'").get().count;
+    res.json({ recipients, title: req.body.title, message: req.body.message, type: req.body.type });
+  })
+);
+
 // GET /api/notifications/:id
 router.get(
   '/:id',
