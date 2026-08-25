@@ -68,8 +68,23 @@ curl -X POST http://localhost:4000/api/members \
   -d '{"name":"Test Member","gender":"male","phone_number":"0911000000"}'
 ```
 
-## Next up
+## Frontend integration endpoints
 
-- `transactions` router (savings deposits, share purchases, loan installments) — protect with `requireAuth`, use `req.admin.id` for `recorded_by`
-- `loans` router (application, approval, disbursement)
-- sync worker (`WHERE synced_at IS NULL` → push to remote)
+All endpoints below require the bearer token returned by login.
+
+- `PATCH /api/auth/password` — change the current admin password with
+  `{ "current_password": "...", "new_password": "..." }`.
+- `GET /api/transactions?type=loan_installment&date_from=2026-01-01&date_to=2026-01-31` —
+  filter transactions by type and/or inclusive date range. `member_id`, `loan_id`,
+  `limit`, and `offset` can be combined with these filters.
+- `GET /api/member-exits/preview/:memberId?exit_date=2026-01-31` — calculate a
+  member's exit payout without writing an exit record, transaction, or member status change.
+- `POST /api/notifications/broadcast/preview` — validate a broadcast and return
+  the active recipient count without creating notifications. Send the same
+  `{ "title": "...", "message": "...", "type": "meeting" }` body to
+  `POST /api/notifications/broadcast` after confirmation.
+
+The existing routes also cover members, administrators, loans, expenses,
+dividends, notifications, and sync operations. Local SQLite migrations are
+applied with `npm run migrate:local`; remote Postgres migrations must be
+applied to the remote database separately.
