@@ -56,7 +56,7 @@ function MembersPage() {
             <TableBody>{filteredMembers.map((member) => <TableRow key={member.id}>
               <TableCell><Link to={`/members/${member.id}`} className="font-medium hover:text-primary hover:underline">{member.name}</Link><p className="mt-1 text-xs text-muted-foreground">{member.gender}{member.age ? ` · ${member.age} years` : ""}</p></TableCell>
               <TableCell>{member.phone_number}</TableCell>
-              <TableCell className="text-muted-foreground">{formatEthiopianDate(member.date_joined)}</TableCell>
+              <TableCell className="font-amharic text-muted-foreground">{formatEthiopianDate(member.date_joined)}</TableCell>
               <TableCell><Badge variant={member.status === "active" ? "default" : "secondary"}>{member.status}</Badge></TableCell>
               <TableCell><Button variant="ghost" size="icon-sm" render={<Link to={`/members/${member.id}`} />} aria-label={`Open ${member.name}`}><ArrowUpRight /></Button></TableCell>
             </TableRow>)}</TableBody>

@@ -4,6 +4,16 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/geist";
 
+@font-face {
+  font-family: "Addis Sans";
+  src: url("./Addis-Sans.ttf") format("truetype");
+  font-display: swap;
+}
+
+.font-amharic {
+  font-family: "Addis Sans", sans-serif;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {

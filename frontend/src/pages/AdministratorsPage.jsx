@@ -66,7 +66,7 @@ function AdministratorsPage() {
                       <TableCell className="font-medium"><span className="flex items-center gap-2"><UserRound className="text-muted-foreground" />{administrator.name}</span></TableCell>
                       <TableCell>{administrator.username}</TableCell>
                       <TableCell><Badge variant={administrator.status === "active" ? "default" : "secondary"}>{administrator.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{formatEthiopianDate(administrator.created_at)}</TableCell>
+                      <TableCell className="font-amharic text-muted-foreground">{<span className="font-amharic">{formatEthiopianDate(administrator.created_at)}</span>}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -43,15 +43,15 @@ function DatePicker({ value, onChange, placeholder = "ቀን ይምረጡ", clas
   return <Popover open={open} onOpenChange={handleOpenChange}>
     <PopoverTrigger render={<Button variant="outline" className={className} aria-label={ariaLabel} />}>
       <CalendarDays data-icon="inline-start" />
-      {value ? formatEthiopianDate(value) : placeholder}
+      <span className="font-amharic">{value ? formatEthiopianDate(value) : placeholder}</span>
     </PopoverTrigger>
     <PopoverContent align="start" className="w-auto p-3">
       <div className="flex items-center justify-between gap-3 pb-3">
         <Button type="button" variant="ghost" size="icon-sm" onClick={() => moveMonth(-1)} aria-label="Previous Ethiopian month"><ChevronLeft /></Button>
-        <div className="text-center text-sm font-semibold">{ETHIOPIAN_MONTHS[view.month - 1]} {view.year}</div>
+        <div className="font-amharic text-center text-sm font-semibold">{ETHIOPIAN_MONTHS[view.month - 1]} {view.year}</div>
         <Button type="button" variant="ghost" size="icon-sm" onClick={() => moveMonth(1)} aria-label="Next Ethiopian month"><ChevronRight /></Button>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
+      <div className="font-amharic grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
         {WEEKDAYS.map((day, index) => <div key={`${day}-${index}`} className="flex size-8 items-center justify-center font-medium">{day}</div>)}
         {cells.map((day, index) => day === null ? <div key={`empty-${index}`} /> : <button key={day} type="button" disabled={isDisabled(day)} onClick={() => selectDate(day)} className={`flex size-8 items-center justify-center rounded-lg text-sm hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-30 ${selected?.year === view.year && selected?.month === view.month && selected?.day === day ? "bg-primary text-primary-foreground" : ""}`}>{day}</button>)}
       </div>
