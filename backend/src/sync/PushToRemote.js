@@ -153,9 +153,14 @@ async function pushTable({ name, columns, coerce }) {
     ? 'COALESCE(updated_at, exit_date)'
     : name === 'dividend_history'
       ? 'COALESCE(updated_at, date_calculated)'
-    : 'COALESCE(updated_at, created_at)';
+      : 'COALESCE(updated_at, created_at)';
+  const orderColumn = name === 'member_exits'
+    ? 'exit_date'
+    : name === 'dividend_history'
+      ? 'date_calculated'
+      : 'created_at';
   const pendingRows = db
-    .prepare(`SELECT * FROM ${name} WHERE synced_at IS NULL ORDER BY ${name === 'member_exits' ? 'exit_date' : 'created_at'} ASC, id ASC`)
+    .prepare(`SELECT * FROM ${name} WHERE synced_at IS NULL ORDER BY ${orderColumn} ASC, id ASC`)
     .all();
 
   const result = { table: name, found: pendingRows.length, pushed: 0, skipped: 0, failed: [] };
