@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useMembers } from "@/hooks/use-members"
 import { useCreateTransaction } from "@/hooks/use-transactions"
+import { todayGregorianIso } from "@/lib/ethiopian-calendar"
 
 const types = { savings_deposit: "Savings deposit", share_purchase: "Share purchase", penalty_payment: "Penalty payment", registration_fee: "Registration fee", card_fee: "Card fee", loan_disbursement: "Loan disbursement", loan_installment: "Loan installment", loan_interest: "Loan interest", loan_insurance: "Loan insurance", bank_interest_income: "Bank interest income" }
-const initialForm = { type: "savings_deposit", member_id: "", loan_id: "", amount: "", date: new Date().toISOString().slice(0, 10), notes: "" }
+const initialForm = { type: "savings_deposit", member_id: "", loan_id: "", amount: "", date: todayGregorianIso(), notes: "" }
 
 function TransactionFormPage() {
   const navigate = useNavigate()

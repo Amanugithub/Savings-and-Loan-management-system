@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useCreateAdministrator, useAdministrators } from "@/hooks/use-administrators"
+import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
 
 const initialForm = { name: "", username: "", password: "" }
 
@@ -65,7 +66,7 @@ function AdministratorsPage() {
                       <TableCell className="font-medium"><span className="flex items-center gap-2"><UserRound className="text-muted-foreground" />{administrator.name}</span></TableCell>
                       <TableCell>{administrator.username}</TableCell>
                       <TableCell><Badge variant={administrator.status === "active" ? "default" : "secondary"}>{administrator.status}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground">{new Date(administrator.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-muted-foreground">{formatEthiopianDate(administrator.created_at)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
