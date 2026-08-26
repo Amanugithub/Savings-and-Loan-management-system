@@ -177,11 +177,15 @@ async function pushTable({ name, columns, coerce }) {
   const conflictGuard = hasUpdatedAt
     ? ` WHERE ${name}.updated_at IS NULL OR EXCLUDED.updated_at >= ${name}.updated_at`
     : '';
+  // PostgreSQL requires an inference target for ON CONFLICT DO UPDATE.
+  // Administrators are reconciled by username; all other synchronized rows
+  // use their UUID as the stable conflict key.
+  const conflictTarget = name === 'administrators' ? '(username)' : '(id)';
 
   const sql = `
     INSERT INTO ${name} (${columns.join(', ')})
     VALUES (${placeholders})
-    ON CONFLICT DO UPDATE SET ${updateSet}${conflictGuard}
+    ON CONFLICT ${conflictTarget} DO UPDATE SET ${updateSet}${conflictGuard}
     RETURNING id
   `;
 
