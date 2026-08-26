@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ArrowRight, Building2, Eye, EyeOff, LockKeyhole, Moon, Sparkles, Sun, UserRound } from "lucide-react"
+import { ArrowRight, Building2, Eye, EyeOff, LockKeyhole, Moon, Sun, UserRound } from "lucide-react"
 import { useLocation, useNavigate } from "react-router-dom"
 
 import { Button } from "@/components/ui/button"
@@ -35,42 +35,41 @@ function LoginPage() {
     }
   }
 
-  return <main className="relative grid min-h-svh w-full grid-cols-1 overflow-hidden bg-background text-foreground md:grid-cols-2">
-    <Button variant="ghost" size="icon" className="absolute right-4 top-4 z-10 rounded-full md:right-8 md:top-8" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-      {theme === "dark" ? <Sun /> : <Moon />}
-    </Button>
-    <section className="flex items-center justify-center px-6 py-16 sm:px-10">
-      <Card className="w-full max-w-sm border-0 bg-transparent shadow-none ring-0">
-        <CardHeader className="px-0">
-          <div className="mb-5 flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary md:hidden"><Building2 /></div>
-          <CardTitle className="font-heading text-2xl font-bold tracking-tight">Sign in to Amanuel SACCO</CardTitle>
-          <CardDescription className="text-sm">Welcome back. Enter your administrator credentials to continue.</CardDescription>
-        </CardHeader>
-        <CardContent className="px-0">
-          <form onSubmit={submit} className="flex flex-col gap-5">
-            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="username">Username
-              <span className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input id="username" name="username" value={credentials.username} onChange={updateField} className="pl-10" autoComplete="username" required /></span>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="password">Password
-              <span className="relative"><LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input id="password" name="password" type={showPassword ? "text" : "password"} value={credentials.password} onChange={updateField} className="pr-10 pl-10" autoComplete="current-password" required /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</Button></span>
-            </label>
-            {error && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="mt-2 w-full" disabled={isSubmitting}>{isSubmitting ? "Signing in…" : "Sign in"}<ArrowRight data-icon="inline-end" /></Button>
-          </form>
-        </CardContent>
-      </Card>
-    </section>
-    <section className="dark relative hidden overflow-hidden border-l border-border bg-background text-foreground md:block">
-      <div aria-hidden="true" className="absolute inset-0 [background-image:linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] [background-size:40px_40px] opacity-[0.07]" />
-      <div aria-hidden="true" className="absolute -right-24 -top-24 size-80 rounded-full bg-foreground/10 blur-3xl" />
-      <div aria-hidden="true" className="absolute -bottom-32 -left-16 size-96 rounded-full bg-foreground/10 blur-3xl" />
-      <div className="relative flex h-full flex-col justify-between p-10 lg:p-14">
-        <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-foreground/10"><Building2 className="size-5" /></div><span className="text-lg font-semibold tracking-tight">Amanuel SACCO</span></div>
-        <div className="max-w-md"><span className="inline-flex items-center gap-1.5 rounded-md border border-foreground/30 bg-foreground/10 px-2.5 py-1 text-xs font-medium"><Sparkles className="size-3.5" /> Cooperative management</span><h1 className="mt-6 font-heading text-4xl font-bold leading-tight tracking-tight">Keep your cooperative moving forward.</h1><p className="mt-4 text-base text-foreground/80">One secure workspace for members, savings, lending, transactions, and the daily work that keeps your community growing.</p></div>
-        <p className="text-sm text-foreground/70">Secure access for authorized administrators.</p>
+  return (
+    <main className="relative grid min-h-svh place-items-center overflow-hidden bg-background p-4 md:p-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--color-primary)_0,_transparent_28%)] opacity-[0.08]" />
+      <Button variant="ghost" size="icon" className="absolute right-4 top-4 rounded-full md:right-8 md:top-8" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+        {theme === "dark" ? <Sun /> : <Moon />}
+      </Button>
+      <div className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border bg-card shadow-2xl md:grid-cols-[0.9fr_1.1fr]">
+        <section className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground md:flex lg:p-14">
+          <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/15"><Building2 /></div><span className="font-heading text-lg font-semibold">Amanuel SACCO</span></div>
+          <div><p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-primary-foreground/70">Management portal</p><h1 className="font-heading text-4xl font-semibold leading-tight">Keep the cooperative moving forward.</h1><p className="mt-5 max-w-sm text-primary-foreground/75">Manage members, savings, lending, and the daily work that keeps your community growing.</p></div>
+          <p className="text-sm text-primary-foreground/60">Secure access for authorized administrators.</p>
+        </section>
+
+        <Card className="rounded-none border-0 shadow-none">
+          <CardHeader className="gap-3 p-8 pb-4 md:p-12 md:pb-6">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary md:hidden"><Building2 /></div>
+            <CardTitle className="font-heading text-2xl">Welcome back</CardTitle>
+            <CardDescription>Sign in to your administrator account to continue.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-8 pt-4 md:p-12 md:pt-6">
+            <form onSubmit={submit} className="flex flex-col gap-5">
+              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="username">Username
+                <span className="relative"><UserRound className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input id="username" name="username" value={credentials.username} onChange={updateField} className="pl-10" autoComplete="username" required /></span>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="password">Password
+                <span className="relative"><LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input id="password" name="password" type={showPassword ? "text" : "password"} value={credentials.password} onChange={updateField} className="pr-10 pl-10" autoComplete="current-password" required /><Button type="button" variant="ghost" size="icon-sm" className="absolute right-1 top-1/2 -translate-y-1/2" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? <EyeOff /> : <Eye />}</Button></span>
+              </label>
+              {error && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+              <Button type="submit" size="lg" className="mt-2 w-full" disabled={isSubmitting}>{isSubmitting ? "Signing in…" : "Sign in"}<ArrowRight data-icon="inline-end" /></Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
-    </section>
-  </main>
+    </main>
+  )
 }
 
 export default LoginPage
