@@ -15,14 +15,15 @@ Edit `.env` — set `DATABASE_URL` to your Supabase Postgres connection string o
 npm run migrate:local
 ```
 
-This creates `local.db` in the project root and runs everything in
-`src/db/migrations/sqlite/` (currently just `001_init.sql`, your full schema).
-It tracks what's been applied in a `schema_migrations` table, so re-running
-it later is safe — it only applies new migration files.
+This creates `local.db` in the project root and runs `master.sql` from
+`src/db/migrations/sqlite/`. It tracks the applied schema in a
+`schema_migrations` table, so re-running it is safe. Since this project uses
+a consolidated schema for development, recreate `local.db` after schema
+changes before running the seed scripts again.
 
 ## Apply the remote Postgres schema
 
-For now, run `src/db/migrations/postgres/001_init.sql` directly against your
+For now, run `src/db/migrations/postgres/master.sql` directly against your
 Supabase project via the SQL editor (Supabase dashboard → SQL Editor → paste
 and run). A scripted runner for this can be added later if you outgrow the
 web editor.
