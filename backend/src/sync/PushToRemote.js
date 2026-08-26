@@ -72,6 +72,10 @@ const FOREIGN_KEYS = {
   notifications: { member_id: 'members', loan_id: 'loans' },
 };
 
+// Keep the remote writes concurrent enough to make initial sync practical,
+// while bounding load on Supabase and preserving table-level FK ordering.
+const PUSH_CONCURRENCY = 10;
+
 function mappedId(table, localId) {
   if (!localId) return localId;
   return db.prepare(
@@ -181,47 +185,57 @@ async function pushTable({ name, columns, coerce }) {
     RETURNING id
   `;
 
-  for (const rawRow of pendingRows) {
-    const row = coerce ? coerce(rawRow) : rawRow;
-    const remoteRow = { ...row, id: mappedId(name, row.id) };
-    for (const [column, referencedTable] of Object.entries(FOREIGN_KEYS[name] || {})) {
-      if (remoteRow[column]) remoteRow[column] = mappedId(referencedTable, remoteRow[column]);
-    }
-    if (hasUpdatedAt && !remoteRow.updated_at) remoteRow.updated_at = remoteRow.created_at;
-    const values = columns.map((column) => remoteRow[column] ?? null);
+  let nextIndex = 0;
+  async function pushNext() {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= pendingRows.length) return;
 
-    try {
-      const queryResult = await pool.query(sql, values);
-      let remoteId = queryResult.rows[0]?.id;
+      const rawRow = pendingRows[index];
+      const row = coerce ? coerce(rawRow) : rawRow;
+      const remoteRow = { ...row, id: mappedId(name, row.id) };
+      for (const [column, referencedTable] of Object.entries(FOREIGN_KEYS[name] || {})) {
+        if (remoteRow[column]) remoteRow[column] = mappedId(referencedTable, remoteRow[column]);
+      }
+      if (hasUpdatedAt && !remoteRow.updated_at) remoteRow.updated_at = remoteRow.created_at;
+      const values = columns.map((column) => remoteRow[column] ?? null);
 
-      // For tables that track updated_at, a stale local row can be safely
-      // skipped if the remote row already has a newer state.
-      if (!remoteId && hasUpdatedAt) {
-        const identityResult = await getRemoteIdentity(table, remoteRow);
-        remoteId = identityResult.rows[0]?.id;
-        if (!remoteId) {
-          result.failed.push({ id: row.id, error: 'Remote row was not returned after conflict check' });
+      try {
+        const queryResult = await pool.query(sql, values);
+        let remoteId = queryResult.rows[0]?.id;
+
+        // For tables that track updated_at, a stale local row can be safely
+        // skipped if the remote row already has a newer state.
+        if (!remoteId && hasUpdatedAt) {
+          const identityResult = await getRemoteIdentity(table, remoteRow);
+          remoteId = identityResult.rows[0]?.id;
+          if (!remoteId) {
+            result.failed.push({ id: row.id, error: 'Remote row was not returned after conflict check' });
+            continue;
+          }
+        }
+
+        if (remoteId) recordMapping(table, row.id, remoteId);
+        const snapshotVersion = rawRow.updated_at
+          ?? rawRow.created_at
+          ?? rawRow.date_calculated;
+        const updateResult = markSynced.run(row.id, snapshotVersion);
+        if (updateResult.changes === 0) {
+          result.skipped++;
           continue;
         }
-      }
 
-      if (remoteId) recordMapping(table, row.id, remoteId);
-      const snapshotVersion = rawRow.updated_at
-        ?? rawRow.created_at
-        ?? rawRow.date_calculated;
-      const updateResult = markSynced.run(row.id, snapshotVersion);
-      if (updateResult.changes === 0) {
-        result.skipped++;
-        continue;
+        result.pushed++;
+      } catch (error) {
+        // One bad row (e.g. a stale FK reference) shouldn't block the
+        // rest of the batch -- record it and keep going.
+        result.failed.push({ id: row.id, error: error.message });
       }
-
-      result.pushed++;
-    } catch (error) {
-      // One bad row (e.g. a stale FK reference) shouldn't block the
-      // rest of the batch -- record it and keep going.
-      result.failed.push({ id: row.id, error: error.message });
     }
   }
+
+  const workerCount = Math.min(PUSH_CONCURRENCY, pendingRows.length);
+  await Promise.all(Array.from({ length: workerCount }, () => pushNext()));
 
   return result;
 }

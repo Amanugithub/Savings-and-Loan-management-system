@@ -38,6 +38,17 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
+    const preflight = await getSyncStatus();
+    if (!preflight.ok) {
+      return res.status(503).json({
+        ok: false,
+        status: 'unavailable',
+        summary: { pulled: 0, pull_skipped: 0, pushed: 0, skipped: 0, failed: 0 },
+        health: preflight,
+        error: 'Remote database is unavailable; synchronization was not started.',
+      });
+    }
+
     const pulled = await runPull();
     const results = await runSync();
     const health = await getSyncStatus();
