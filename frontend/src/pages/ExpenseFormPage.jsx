@@ -10,9 +10,10 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCreateExpense } from "@/hooks/use-expenses"
+import { todayGregorianIso } from "@/lib/ethiopian-calendar"
 
 const categories = { supplies: "Supplies", utilities: "Utilities", rent: "Rent", maintenance: "Maintenance", equipment: "Equipment", other: "Other" }
-const initialForm = { category: "supplies", amount: "", description: "", date: new Date().toISOString().slice(0, 10) }
+const initialForm = { category: "supplies", amount: "", description: "", date: todayGregorianIso() }
 
 function ExpenseFormPage() {
   const navigate = useNavigate()
