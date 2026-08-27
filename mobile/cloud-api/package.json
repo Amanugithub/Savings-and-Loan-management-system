@@ -1,10 +1,25 @@
 {
-  "name": "cloud-api",
+  "name": "sacco-mobile-api",
   "version": "1.0.0",
-  "description": "simple backend api for the savings and loan management system",
   "type": "module",
-  "main": "index.js",
+  "main": "src/app.js",
+  "description": "Thin, always-on Express API for the member mobile app. Talks directly to Supabase Postgres — no SQLite, no sync worker. Separate deployment from the office admin backend.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true
   }
 }
