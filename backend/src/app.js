@@ -5,11 +5,13 @@ import dotenv from 'dotenv';
 import membersRouter from './routes/members.js';
 import administratorsRouter from './routes/administrators.js';
 import authRouter from './routes/auth.js';
-// import transactionsRouter from './routes/transactions.js';
-// import loansRouter from './routes/loans.js';
-// import expensesRouter from './routes/expenses.js';
-// import syncRouter from './routes/sync.js';
-
+import transactionsRouter from './routes/transactions.js';
+import loansRouter from './routes/loans.js';
+import syncRouter from './routes/sync.js';
+import expensesRouter from './routes/expenses.js';
+import dividendHistoryRouter from './routes/dividend-history.js';
+import memberExitsRouter from './routes/member-exits.js';
+import notificationsRouter from './routes/notifications.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -24,11 +26,13 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/api/members', membersRouter);
 app.use('/api/administrators', administratorsRouter);
 app.use('/api/auth', authRouter);
-// app.use('/api/transactions', transactionsRouter);
-// app.use('/api/loans', loansRouter);
-// app.use('/api/expenses', expensesRouter);
-// app.use('/api/sync', syncRouter);
-
+app.use('/api/transactions', transactionsRouter);
+app.use('/api/loans', loansRouter);
+app.use('/api/sync', syncRouter);
+app.use('/api/expenses', expensesRouter);
+app.use('/api/dividend-history', dividendHistoryRouter);
+app.use('/api/member-exits', memberExitsRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
