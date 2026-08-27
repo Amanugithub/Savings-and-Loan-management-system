@@ -26,8 +26,15 @@ router.get(
       return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
     }
 
-    const parsedLimit = Math.min(parseInt(limit, 10) || 50, 200);
-    const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 200) {
+      return res.status(400).json({ error: 'limit must be an integer between 1 and 200' });
+    }
+    if (!Number.isInteger(parsedOffset) || parsedOffset < 0) {
+      return res.status(400).json({ error: 'offset must be a non-negative integer' });
+    }
 
     const conditions = ['member_id = $1'];
     const params = [req.member.id];

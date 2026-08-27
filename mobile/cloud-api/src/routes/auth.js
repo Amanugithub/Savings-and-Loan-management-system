@@ -11,7 +11,7 @@ const SALT_ROUNDS = 10;
 router.post(
   '/login',
   asyncHandler(async (req, res) => {
-    const { phone_number, password } = req.body;
+    const { phone_number, password } = req.body ?? {};
 
     if (!phone_number || !password) {
       return res.status(400).json({ error: 'phone_number and password are required' });
@@ -68,6 +68,10 @@ router.patch(
     const { rows } = await pool.query('SELECT * FROM members WHERE id = $1', [req.member.id]);
     const member = rows[0];
     if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    if (!member.password_hash) {
+      return res.status(409).json({ error: 'Account has no password set — visit the office to set one' });
+    }
 
     const passwordMatches = await bcrypt.compare(current_password, member.password_hash);
     if (!passwordMatches) return res.status(401).json({ error: 'Current password is incorrect' });

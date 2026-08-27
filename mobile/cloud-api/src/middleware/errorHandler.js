@@ -16,7 +16,10 @@ export function errorHandler(err, req, res, next) {
   }
 
   const status = err.status || 500;
-  res.status(status).json({ error: err.message || 'Server error' });
+  const message = status >= 500 && process.env.NODE_ENV === 'production'
+    ? 'Server error'
+    : err.message || 'Server error';
+  res.status(status).json({ error: message });
 }
 
 // Wrap async route handlers so thrown/rejected errors reach errorHandler
