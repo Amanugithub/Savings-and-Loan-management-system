@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useMembers } from "@/hooks/use-members"
 import { useLoans } from "@/hooks/use-loans"
 
+
 const statuses = ["all", "pending", "active", "closed", "rejected"]
 const statusVariant = { pending: "secondary", active: "default", closed: "outline", rejected: "destructive" }
 
