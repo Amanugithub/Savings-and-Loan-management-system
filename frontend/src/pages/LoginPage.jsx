@@ -37,13 +37,13 @@ function LoginPage() {
 
   return (
     <main className="relative grid min-h-svh place-items-center overflow-hidden bg-background p-4 md:p-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--color-primary)_0,_transparent_28%)] opacity-[0.08]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,var(--color-primary)_0,transparent_28%)] opacity-[0.08]" />
       <Button variant="ghost" size="icon" className="absolute right-4 top-4 rounded-full md:right-8 md:top-8" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
         {theme === "dark" ? <Sun /> : <Moon />}
       </Button>
       <div className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border bg-card shadow-2xl md:grid-cols-[0.9fr_1.1fr]">
         <section className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground md:flex lg:p-14">
-          <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/15"><Building2 /></div><span className="font-heading text-lg font-semibold">Amanuel SACCO</span></div>
+          <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/15"><Building2 /></div><span className="font-heading text-lg font-semibold">Tokuma Misomaf</span></div>
           <div><p className="mb-4 text-sm font-medium uppercase tracking-[0.2em] text-primary-foreground/70">Management portal</p><h1 className="font-heading text-4xl font-semibold leading-tight">Keep the cooperative moving forward.</h1><p className="mt-5 max-w-sm text-primary-foreground/75">Manage members, savings, lending, and the daily work that keeps your community growing.</p></div>
           <p className="text-sm text-primary-foreground/60">Secure access for authorized administrators.</p>
         </section>
