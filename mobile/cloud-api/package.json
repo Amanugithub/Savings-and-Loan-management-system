@@ -1,0 +1,10 @@
+{
+  "name": "cloud-api",
+  "version": "1.0.0",
+  "description": "simple backend api for the savings and loan management system",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
