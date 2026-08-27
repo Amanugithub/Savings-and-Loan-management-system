@@ -15,14 +15,15 @@ Edit `.env` — set `DATABASE_URL` to your Supabase Postgres connection string o
 npm run migrate:local
 ```
 
-This creates `local.db` in the project root and runs everything in
-`src/db/migrations/sqlite/` (currently just `001_init.sql`, your full schema).
-It tracks what's been applied in a `schema_migrations` table, so re-running
-it later is safe — it only applies new migration files.
+This creates `local.db` in the project root and runs `master.sql` from
+`src/db/migrations/sqlite/`. It tracks the applied schema in a
+`schema_migrations` table, so re-running it is safe. Since this project uses
+a consolidated schema for development, recreate `local.db` after schema
+changes before running the seed scripts again.
 
 ## Apply the remote Postgres schema
 
-For now, run `src/db/migrations/postgres/001_init.sql` directly against your
+For now, run `src/db/migrations/postgres/master.sql` directly against your
 Supabase project via the SQL editor (Supabase dashboard → SQL Editor → paste
 and run). A scripted runner for this can be added later if you outgrow the
 web editor.
@@ -68,8 +69,23 @@ curl -X POST http://localhost:4000/api/members \
   -d '{"name":"Test Member","gender":"male","phone_number":"0911000000"}'
 ```
 
-## Next up
+## Frontend integration endpoints
 
-- `transactions` router (savings deposits, share purchases, loan installments) — protect with `requireAuth`, use `req.admin.id` for `recorded_by`
-- `loans` router (application, approval, disbursement)
-- sync worker (`WHERE synced_at IS NULL` → push to remote)
+All endpoints below require the bearer token returned by login.
+
+- `PATCH /api/auth/password` — change the current admin password with
+  `{ "current_password": "...", "new_password": "..." }`.
+- `GET /api/transactions?type=loan_installment&date_from=2026-01-01&date_to=2026-01-31` —
+  filter transactions by type and/or inclusive date range. `member_id`, `loan_id`,
+  `limit`, and `offset` can be combined with these filters.
+- `GET /api/member-exits/preview/:memberId?exit_date=2026-01-31` — calculate a
+  member's exit payout without writing an exit record, transaction, or member status change.
+- `POST /api/notifications/broadcast/preview` — validate a broadcast and return
+  the active recipient count without creating notifications. Send the same
+  `{ "title": "...", "message": "...", "type": "meeting" }` body to
+  `POST /api/notifications/broadcast` after confirmation.
+
+The existing routes also cover members, administrators, loans, expenses,
+dividends, notifications, and sync operations. Local SQLite migrations are
+applied with `npm run migrate:local`; remote Postgres migrations must be
+applied to the remote database separately.
