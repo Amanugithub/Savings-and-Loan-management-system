@@ -13,7 +13,7 @@ export async function apiRequest(path, options = {}) {
 
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && path !== "/auth/login") {
       window.dispatchEvent(new Event("auth:session-expired"));
     }
 

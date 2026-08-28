@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Building2,
@@ -25,7 +25,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 
 function LoginPage() {
-  const { login } = useAuth();
+  const { login, sessionExpired, clearSessionExpired } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,17 +35,26 @@ function LoginPage() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const sessionExpiredToastShown = useRef(false);
 
   useEffect(() => {
-    if (location.state?.sessionExpired) {
-      toast.error("Your session has expired. Please sign in again.");
+    if (!sessionExpired) return;
 
-      navigate("/login", {
-        replace: true,
-        state: {},
-      });
-    }
-  }, [location.state, navigate]);
+    if (sessionExpiredToastShown.current) return;
+
+    sessionExpiredToastShown.current = true;
+
+    toast.error("Your session has expired. Please sign in again.", {
+      id: "session-expired",
+    });
+
+    clearSessionExpired();
+
+    navigate("/login", {
+      replace: true,
+      state: {},
+    });
+  }, [sessionExpired, clearSessionExpired, navigate]);
 
   const updateField = (event) =>
     setCredentials((current) => ({

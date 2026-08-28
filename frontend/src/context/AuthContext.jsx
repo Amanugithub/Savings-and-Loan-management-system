@@ -87,6 +87,9 @@ export function AuthProvider({ children }) {
     setSessionExpired(false);
     return nextSession;
   }
+  function clearSessionExpired() {
+    setSessionExpired(false);
+  }
 
   function logout() {
     try {
@@ -106,6 +109,7 @@ export function AuthProvider({ children }) {
         admin: session?.admin ?? null,
         isAuthenticated: Boolean(session),
         sessionExpired,
+        clearSessionExpired,
         login,
         logout,
       }}
