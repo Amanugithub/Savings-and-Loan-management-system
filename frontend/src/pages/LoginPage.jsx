@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ArrowRight,
   Building2,
@@ -35,6 +35,17 @@ function LoginPage() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.sessionExpired) {
+      toast.error("Your session has expired. Please sign in again.");
+
+      navigate("/login", {
+        replace: true,
+        state: {},
+      });
+    }
+  }, [location.state, navigate]);
 
   const updateField = (event) =>
     setCredentials((current) => ({
@@ -164,7 +175,7 @@ function LoginPage() {
                   </Button>
                 </span>
               </label>
-              
+
               <Button
                 type="submit"
                 size="lg"
