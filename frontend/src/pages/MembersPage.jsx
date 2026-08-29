@@ -23,6 +23,16 @@ function MembersPage() {
       const matchesSearch = !term || [member.name, member.phone_number, member.id_card_number].some((value) => value?.toLowerCase().includes(term))
       const matchesStatus = status === "all" || member.status === status
       return matchesSearch && matchesStatus
+    }).sort((a, b) => {
+      const aId = a.id_card_number?.trim() || ""
+      const bId = b.id_card_number?.trim() || ""
+      if (!aId && !bId) return a.name.localeCompare(b.name)
+      if (!aId) return 1
+      if (!bId) return -1
+
+      const numericDifference = Number(aId) - Number(bId)
+      if (Number.isFinite(numericDifference) && numericDifference !== 0) return numericDifference
+      return aId.localeCompare(bId, undefined, { numeric: true, sensitivity: "base" })
     })
   }, [members, search, status])
 
