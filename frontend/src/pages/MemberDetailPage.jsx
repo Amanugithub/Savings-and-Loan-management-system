@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { useMember, useResetMemberPassword } from "@/hooks/use-members"
 import { useLoans } from "@/hooks/use-loans"
-import { useTransactions } from "@/hooks/use-transactions"
+import { useTransactionBalances, useTransactions } from "@/hooks/use-transactions"
 import { useDividendHistory } from "@/hooks/use-dividends"
 import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
 
@@ -19,6 +19,7 @@ function MemberDetailPage() {
   const { id } = useParams()
   const { data: member, isLoading, error } = useMember(id)
   const transactionsQuery = useTransactions({ member_id: id, limit: 6, offset: 0 })
+  const balancesQuery = useTransactionBalances(id)
   const loansQuery = useLoans({ member_id: id })
   const dividendsQuery = useDividendHistory({ member_id: id })
   const [password, setPassword] = useState({ new_password: "", confirm_password: "" })
@@ -66,11 +67,18 @@ function MemberDetailPage() {
     )
   }
 
-  return <main className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-    <section><Button variant="ghost" render={<Link to="/members" />} className="mb-4 -ml-3"><ArrowLeft data-icon="inline-start" /> Back to members</Button><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><Badge variant={member.status === "active" ? "default" : "secondary"} className="mb-3">{member.status}</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">{member.name}</h1><p className="mt-2 flex items-center gap-2 text-muted-foreground"><Phone /> {member.phone_number}</p></div><Button variant="outline" render={<Link to={`/members/${member.id}/edit`} />}><Edit data-icon="inline-start" /> Edit member</Button></div></section>
-    <section className="grid items-start gap-5 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <Card className="h-fit"><CardHeader><CardTitle className="flex items-center gap-2"><UserRound /> Profile</CardTitle><CardDescription>Personal and contact information.</CardDescription></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2"><Info label="Gender" value={member.gender} /><Info label="Age" value={member.age ? `${member.age} years` : "Not provided"} /><Info label="ID card" value={member.id_card_number || "Not provided"} /><Info label="Date joined" value={<span className="font-amharic">{formatEthiopianDate(member.date_joined)}</span>} /><Info label="Address" value={member.address || "Not provided"} /><Info label="Heir information" value={member.heir_info || "Not provided"} /></CardContent></Card>
-      <Card className="md:row-span-2"><CardHeader><CardTitle>Member activity</CardTitle><CardDescription>Recent financial records connected to this member.</CardDescription></CardHeader><CardContent className="space-y-5">
+  return <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
+    <section className="flex flex-col gap-5 border-b pb-6"><Button variant="ghost" render={<Link to="/members" />} className="-ml-3 w-fit"><ArrowLeft data-icon="inline-start" /> Back to members</Button><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div className="min-w-0"><Badge variant={member.status === "active" ? "default" : "secondary"} className="mb-3">{member.status}</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{member.name}</h1><p className="mt-2 flex items-center gap-2 text-muted-foreground"><Phone className="size-4" /> {member.phone_number}</p></div><Button variant="outline" render={<Link to={`/members/${member.id}/edit`} />}><Edit data-icon="inline-start" /> Edit member</Button></div></section>
+    <section className="grid gap-4 sm:grid-cols-2">
+      <BalanceCard label="Total savings" value={balancesQuery.isLoading ? "Loading…" : `ETB ${Number(balancesQuery.data?.total_savings || 0).toLocaleString()}`} detail="Opening balance plus deposits" />
+      <BalanceCard label="Total shares" value={balancesQuery.isLoading ? "Loading…" : `ETB ${Number(balancesQuery.data?.total_shares || 0).toLocaleString()}`} detail="Opening balance plus purchases" />
+    </section>
+    <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+      <div className="grid gap-6">
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><UserRound /> Profile</CardTitle><CardDescription>Personal and contact information.</CardDescription></CardHeader><CardContent className="grid gap-x-6 gap-y-5 sm:grid-cols-2"><Info label="Gender" value={member.gender} /><Info label="Age" value={member.age ? `${member.age} years` : "Not provided"} /><Info label="ID card" value={member.id_card_number || "Not provided"} /><Info label="Date joined" value={<span className="font-amharic">{formatEthiopianDate(member.date_joined)}</span>} /><Info label="Address" value={member.address || "Not provided"} /><Info label="Heir information" value={member.heir_info || "Not provided"} /></CardContent></Card>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2"><KeyRound /> Member access</CardTitle><CardDescription>Set or reset the password the member uses in the mobile app.</CardDescription></CardHeader><CardContent><form onSubmit={submitPassword} className="flex flex-col gap-5"><div className="grid gap-4 md:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="member-new-password">New password<Input id="member-new-password" name="new_password" type="password" minLength={8} value={password.new_password} onChange={updatePassword} required /></label><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="member-confirm-password">Confirm password<Input id="member-confirm-password" name="confirm_password" type="password" minLength={8} value={password.confirm_password} onChange={updatePassword} required /></label></div>{passwordMessage && <Alert variant={passwordMessage.variant}><AlertTitle>{passwordMessage.title}</AlertTitle><AlertDescription>{passwordMessage.description}</AlertDescription></Alert>}<div className="flex justify-end"><Button type="submit" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? "Updating…" : "Update member password"}</Button></div></form></CardContent></Card>
+      </div>
+      <Card><CardHeader><CardTitle>Member activity</CardTitle><CardDescription>Recent financial records connected to this member.</CardDescription></CardHeader><CardContent className="space-y-5">
         {activityLoading && <p className="text-sm text-muted-foreground">Loading member activity…</p>}
         {activityError && <p role="alert" className="text-sm text-destructive">Unable to load member activity: {activityError.message}</p>}
         {!activityLoading && !activityError && <>
@@ -95,13 +103,14 @@ function MemberDetailPage() {
           </div>}
         </>}
       </CardContent></Card>
-      <Card className="h-fit md:col-start-1"><CardHeader><CardTitle className="flex items-center gap-2"><KeyRound /> Member access</CardTitle><CardDescription>Set or reset the password the member uses in the mobile app.</CardDescription></CardHeader><CardContent><form onSubmit={submitPassword} className="flex flex-col gap-5"><div className="grid gap-4 md:grid-cols-2"><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="member-new-password">New password<Input id="member-new-password" name="new_password" type="password" minLength={8} value={password.new_password} onChange={updatePassword} required /></label><label className="flex flex-col gap-2 text-sm font-medium" htmlFor="member-confirm-password">Confirm password<Input id="member-confirm-password" name="confirm_password" type="password" minLength={8} value={password.confirm_password} onChange={updatePassword} required /></label></div>{passwordMessage && <Alert variant={passwordMessage.variant}><AlertTitle>{passwordMessage.title}</AlertTitle><AlertDescription>{passwordMessage.description}</AlertDescription></Alert>}<div className="flex justify-end"><Button type="submit" disabled={passwordMutation.isPending}>{passwordMutation.isPending ? "Updating…" : "Update member password"}</Button></div></form></CardContent></Card>
     </section>
     <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen} title="Update member password?" description={`This will replace the mobile login password for ${member.name}.`} confirmLabel="Update password" onConfirm={confirmPasswordReset} disabled={passwordMutation.isPending} />
   </main>
 }
 
 function Info({ label, value }) { return <div><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-medium">{value}</dd></div> }
+
+function BalanceCard({ label, value, detail }) { return <Card className="overflow-hidden"><CardContent className="flex items-start justify-between gap-4 p-5"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 font-heading text-2xl font-semibold tracking-tight tabular-nums">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div><div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><WalletCards className="size-5" /></div></CardContent></Card> }
 
 function ActivityMetric({ icon: Icon, label, value }) { return <div className="rounded-xl border bg-muted/30 p-3"><div className="flex items-center gap-2 text-muted-foreground"><Icon className="size-4" /><span className="text-xs">{label}</span></div><p className="mt-1 text-xl font-semibold tabular-nums">{value}</p></div> }
 

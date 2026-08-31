@@ -282,6 +282,47 @@ router.get(
   })
 );
 
+// GET /api/transactions/balances — cumulative member savings and share balances
+// This deliberately uses an aggregate query instead of the paginated transaction list.
+router.get(
+  '/balances',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { member_id: memberId } = req.query;
+    if (Array.isArray(memberId)) {
+      return res.status(400).json({ error: 'member_id must be a single value, not an array' });
+    }
+
+    const conditions = ['member_id IS NOT NULL'];
+    const params = [];
+    if (memberId) {
+      conditions.push('member_id = ?');
+      params.push(memberId);
+    }
+
+    const balances = db
+      .prepare(`
+        SELECT
+          ROUND(COALESCE(SUM(CASE
+            WHEN type IN ('savings_deposit', 'opening_savings_balance') THEN amount
+            ELSE 0
+          END), 0), 2) AS total_savings,
+          ROUND(COALESCE(SUM(CASE
+            WHEN type IN ('share_purchase', 'opening_share_balance') THEN amount
+            ELSE 0
+          END), 0), 2) AS total_shares
+        FROM transactions
+        WHERE ${conditions.join(' AND ')}
+      `)
+      .get(...params);
+
+    res.json({
+      total_savings: Number(balances.total_savings || 0),
+      total_shares: Number(balances.total_shares || 0),
+    });
+  })
+);
+
 // GET /api/transactions/:id
 router.get(
   '/:id',

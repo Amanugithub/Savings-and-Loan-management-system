@@ -8,6 +8,11 @@ export function getTransactions(filters = {}) {
   return apiRequest(`/transactions?${params.toString()}`)
 }
 
+export function getTransactionBalances(memberId) {
+  const query = memberId ? `?member_id=${encodeURIComponent(memberId)}` : ""
+  return apiRequest(`/transactions/balances${query}`)
+}
+
 export function createTransaction(payload) {
   return apiRequest("/transactions", { method: "POST", body: JSON.stringify(payload) })
 }
