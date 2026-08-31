@@ -41,6 +41,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTheme } from "@/context/ThemeContext"
 import { useAuth } from "@/context/AuthContext"
 import { useLanguage } from "@/context/LanguageContext"
+import { LANGUAGES } from "@/lib/language"
 
 const navigationGroups = [
   {
@@ -145,17 +146,19 @@ function AppShell() {
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>
-          <Select value={language} onValueChange={setLanguage}>
-            <SelectTrigger id="admin-language" size="sm" className="w-auto min-w-24 rounded-xl bg-background dark:bg-sidebar" aria-label="Language">
-              <SelectValue>{language === "am" ? "አማርኛ" : "English"}</SelectValue>
-            </SelectTrigger>
-            <SelectContent align="end">
+          <div data-no-translate>
+            <Select value={language} onValueChange={setLanguage}>
+              <SelectTrigger id="admin-language" size="sm" className="w-auto min-w-24 rounded-xl bg-background dark:bg-sidebar" aria-label="Language">
+                <SelectValue>{LANGUAGES[language].nativeLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent align="end" data-no-translate>
               <SelectGroup>
                 <SelectItem value="en">English</SelectItem>
                 <SelectItem value="am">አማርኛ</SelectItem>
               </SelectGroup>
-            </SelectContent>
-          </Select>
+              </SelectContent>
+            </Select>
+          </div>
           <Popover>
             <PopoverTrigger render={<Button variant="ghost" size="sm" className="rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
               <Avatar size="sm">

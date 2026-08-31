@@ -19,7 +19,7 @@ function translateDocument(language) {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
   let node
   while ((node = walker.nextNode())) {
-    if (node.parentElement?.closest("script, style")) continue
+    if (node.parentElement?.closest("script, style, [data-no-translate]")) continue
     const original = originalTextByNode.get(node) || node.textContent
     originalTextByNode.set(node, original)
     const translated = translatedText(original, language)
@@ -27,6 +27,7 @@ function translateDocument(language) {
   }
 
   document.querySelectorAll("[placeholder], [aria-label], [title]").forEach((element) => {
+    if (element.closest("[data-no-translate]")) return
     for (const attribute of ["placeholder", "aria-label", "title"]) {
       if (!element.hasAttribute(attribute)) continue
       const key = `original${attribute.replace("-", "_")}`
