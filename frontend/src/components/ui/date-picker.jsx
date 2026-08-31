@@ -1,7 +1,7 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react"
 import { useMemo, useState } from "react"
 
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ETHIOPIAN_MONTHS, ethiopianToGregorianIso, formatEthiopianDate, gregorianToEthiopian, todayGregorianIso } from "@/lib/ethiopian-calendar"
 
@@ -31,25 +31,22 @@ function DatePicker({ value, onChange, placeholder = "ቀን ይምረጡ", clas
     }
   }
   const moveMonth = (amount) => {
-    const absolute = view.year * 13 + view.month - 1 + amount
-    setView({ year: Math.floor(absolute / 13), month: absolute % 13 + 1, day: 1 })
+    setView((current) => {
+      const absolute = current.year * 13 + current.month - 1 + amount
+      return { year: Math.floor(absolute / 13), month: absolute % 13 + 1, day: 1 }
+    })
   }
 
-  const handleOpenChange = (nextOpen) => {
-    if (nextOpen && selected) setView(selected)
-    setOpen(nextOpen)
-  }
-
-  return <Popover open={open} onOpenChange={handleOpenChange}>
+  return <Popover open={open} onOpenChange={setOpen}>
     <PopoverTrigger render={<Button variant="outline" className={className} aria-label={ariaLabel} />}>
       <CalendarDays data-icon="inline-start" />
       <span className="font-amharic">{value ? formatEthiopianDate(value) : placeholder}</span>
     </PopoverTrigger>
-    <PopoverContent align="start" className="w-auto p-3">
+    <PopoverContent key={`${view.year}-${view.month}`} align="start" className="w-auto p-3">
       <div className="flex items-center justify-between gap-3 pb-3">
-        <Button type="button" variant="ghost" size="icon-sm" onClick={() => moveMonth(-1)} aria-label="Previous Ethiopian month"><ChevronLeft /></Button>
+        <button type="button" className={buttonVariants({ variant: "ghost", size: "icon-sm" })} onClick={(event) => { event.preventDefault(); moveMonth(-1) }} aria-label="Previous Ethiopian month"><ChevronLeft /></button>
         <div className="font-amharic text-center text-sm font-semibold">{ETHIOPIAN_MONTHS[view.month - 1]} {view.year}</div>
-        <Button type="button" variant="ghost" size="icon-sm" onClick={() => moveMonth(1)} aria-label="Next Ethiopian month"><ChevronRight /></Button>
+        <button type="button" className={buttonVariants({ variant: "ghost", size: "icon-sm" })} onClick={(event) => { event.preventDefault(); moveMonth(1) }} aria-label="Next Ethiopian month"><ChevronRight /></button>
       </div>
       <div className="font-amharic grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
         {WEEKDAYS.map((day, index) => <div key={`${day}-${index}`} className="flex size-8 items-center justify-center font-medium">{day}</div>)}
