@@ -44,9 +44,9 @@ function LoginPage() {
         {theme === "dark" ? <Sun /> : <Moon />}
       </Button>
       <label className="sr-only" htmlFor="login-language">Language</label>
-      <select id="login-language" value={language} onChange={(event) => setLanguage(event.target.value)} className="absolute right-16 top-4 h-9 rounded-lg border bg-background px-2 text-xs font-medium text-foreground md:right-24 md:top-8">
-        <option value="en">English</option>
-        <option value="am">አማርኛ</option>
+      <select id="login-language" value={language} onChange={(event) => setLanguage(event.target.value)} style={{ colorScheme: theme }} className="absolute right-16 top-4 h-9 rounded-lg border border-input bg-background px-2 text-xs font-medium text-foreground dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground md:right-24 md:top-8">
+        <option value="en" className="bg-background text-foreground">English</option>
+        <option value="am" className="bg-background text-foreground">አማርኛ</option>
       </select>
       <div className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border bg-card shadow-2xl md:grid-cols-[0.9fr_1.1fr]">
         <section className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground md:flex lg:p-14">

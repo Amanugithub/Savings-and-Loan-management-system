@@ -145,9 +145,9 @@ function AppShell() {
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>
           <label className="sr-only" htmlFor="admin-language">Language</label>
-          <select id="admin-language" value={language} onChange={(event) => setLanguage(event.target.value)} className="h-9 rounded-lg border bg-background px-2 text-xs font-medium text-foreground">
-            <option value="en">English</option>
-            <option value="am">አማርኛ</option>
+          <select id="admin-language" value={language} onChange={(event) => setLanguage(event.target.value)} style={{ colorScheme: theme }} className="h-9 rounded-lg border border-input bg-background px-2 text-xs font-medium text-foreground dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground">
+            <option value="en" className="bg-background text-foreground">English</option>
+            <option value="am" className="bg-background text-foreground">አማርኛ</option>
           </select>
           <Popover>
             <PopoverTrigger render={<Button variant="ghost" size="sm" className="rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
