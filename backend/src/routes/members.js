@@ -33,7 +33,17 @@ router.get(
 router.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const member = db.prepare(`SELECT ${MEMBER_COLUMNS} FROM members WHERE id = ?`).get(req.params.id);
+    const member = db.prepare(`
+      SELECT ${MEMBER_COLUMNS},
+        ROUND(COALESCE((SELECT SUM(amount) FROM transactions
+          WHERE member_id = members.id
+            AND type IN ('savings_deposit', 'opening_savings_balance')), 0), 2) AS total_savings,
+        ROUND(COALESCE((SELECT SUM(amount) FROM transactions
+          WHERE member_id = members.id
+            AND type IN ('share_purchase', 'opening_share_balance')), 0), 2) AS total_shares
+      FROM members
+      WHERE id = ?
+    `).get(req.params.id);
     if (!member) return res.status(404).json({ error: 'Member not found' });
     res.json(member);
   })
