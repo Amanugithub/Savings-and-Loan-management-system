@@ -1,7 +1,8 @@
-import { AppText as Text, Button } from '../src/components';
+import { AppText as Text, Button, ThemedAlert } from '../src/components';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useState } from 'react';
 import { useAuth } from '../src/auth';
 import { useLanguage } from '../src/language';
 import { formatEthiopianDateTime } from '../src/ethiopian-calendar';
@@ -12,6 +13,7 @@ export default function Profile() {
   s = createStyles(themeColors);
   const { member, logout } = useAuth();
   const { language, isAmharic, t, changeLanguage } = useLanguage();
+  const [alert, setAlert] = useState(null);
   const font = isAmharic ? { fontFamily: 'SurGraphicsRegular' } : {};
   const display = (value) => value || t('notProvided');
   const gender = member?.gender === 'male' ? (language === 'am' ? 'ወንድ' : language === 'om' ? 'Dhiira' : 'Male') : member?.gender === 'female' ? (language === 'am' ? 'ሴት' : language === 'om' ? 'Dhalaa' : 'Female') : display(member?.gender);
@@ -27,8 +29,9 @@ export default function Profile() {
     {member?.heir_info && <View style={s.card}><Text style={[s.label, font]}>{t('heirInfo')}</Text><View style={s.infoRow}><View style={s.infoIcon}><Ionicons name="people-outline" size={18} color={themeColors.green} /></View><Text style={[s.infoValue, font]}>{member.heir_info}</Text></View></View>}
     <View style={s.card}><Text style={[s.label, font]}>{t('language')}</Text><Text style={[s.languageHint, font]}>{t('changeLanguage')}</Text><View style={s.language}><Pressable onPress={() => changeLanguage('en')} style={[s.languageItem, language === 'en' && s.languageActive]}><Text style={[s.languageText, language === 'en' && s.languageActiveText]}>English</Text></Pressable><Pressable onPress={() => changeLanguage('am')} style={[s.languageItem, language === 'am' && s.languageActive]}><Text style={[s.languageText, language === 'am' && s.languageActiveText, language === 'am' && s.amharic]}>አማርኛ</Text></Pressable><Pressable onPress={() => changeLanguage('om')} style={[s.languageItem, language === 'om' && s.languageActive]}><Text style={[s.languageText, language === 'om' && s.languageActiveText]}>Oromo</Text></Pressable></View></View>
     <View style={s.card}><Text style={[s.label, font]}>{t('appearance')}</Text><View style={s.settingRow}><View style={{ flex: 1 }}><Text style={[s.key, font]}>{t('darkMode')}</Text><Text style={[s.languageHint, font]}>{t('darkModeHint')}</Text></View><Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: themeColors.line, true: themeColors.mintStrong }} thumbColor={isDark ? themeColors.greenBright : themeColors.surface} /></View></View>
-    <Button variant="secondary" onPress={() => Alert.alert(t('changePassword'), language === 'am' ? 'የይለፍ ቃል መቀየር በቅርቡ ይጨመራል።' : 'Password change is connected to the API and will be added to this profile flow next.')}><Text style={font}>{t('changePassword')}</Text></Button>
-    <Pressable onPress={() => Alert.alert(t('logOutQuestion'), t('logOutBody'), [{ text: t('cancel'), style: 'cancel' }, { text: t('logOut'), style: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } }])} style={s.logout}><Text style={[s.logoutText, font]}>{t('logOut')}</Text></Pressable>
+    <Button variant="secondary" onPress={() => setAlert({ title: t('changePassword'), message: language === 'am' ? 'የይለፍ ቃል መቀየር በቅርቡ ይጨመራል።' : 'Password change is connected to the API and will be added to this profile flow next.' })}><Text style={font}>{t('changePassword')}</Text></Button>
+    <Pressable onPress={() => setAlert({ title: t('logOutQuestion'), message: t('logOutBody'), actions: [{ text: t('cancel') }, { text: t('logOut'), variant: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } }] })} style={s.logout}><Text style={[s.logoutText, font]}>{t('logOut')}</Text></Pressable>
+    <ThemedAlert visible={!!alert} title={alert?.title} message={alert?.message} actions={alert?.actions} onClose={() => setAlert(null)} />
   </ScrollView>;
 }
 
