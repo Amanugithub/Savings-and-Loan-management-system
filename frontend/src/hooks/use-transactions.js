@@ -7,7 +7,7 @@ export function useTransactions(filters) {
 }
 
 export function useTransactionBalances(memberId) {
-  return useQuery({ queryKey: ["transaction-balances", memberId || "all"], queryFn: () => getTransactionBalances(memberId) })
+  return useQuery({ queryKey: ["transaction-balances", memberId || "all"], queryFn: () => getTransactionBalances(memberId), enabled: memberId === undefined || Boolean(memberId) })
 }
 
 export function useTransactionSummary(filters) {
@@ -21,6 +21,7 @@ export function useCreateTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
       queryClient.invalidateQueries({ queryKey: ["transaction-balances"] })
+      queryClient.invalidateQueries({ queryKey: ["members"] })
     },
   })
 }

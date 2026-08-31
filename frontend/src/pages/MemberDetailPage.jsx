@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { useMember, useResetMemberPassword } from "@/hooks/use-members"
 import { useLoans } from "@/hooks/use-loans"
-import { useTransactionBalances, useTransactions } from "@/hooks/use-transactions"
+import { useTransactions } from "@/hooks/use-transactions"
 import { useDividendHistory } from "@/hooks/use-dividends"
 import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
 
@@ -19,7 +19,6 @@ function MemberDetailPage() {
   const { id } = useParams()
   const { data: member, isLoading, error } = useMember(id)
   const transactionsQuery = useTransactions({ member_id: id, limit: 6, offset: 0 })
-  const balancesQuery = useTransactionBalances(id)
   const loansQuery = useLoans({ member_id: id })
   const dividendsQuery = useDividendHistory({ member_id: id })
   const [password, setPassword] = useState({ new_password: "", confirm_password: "" })
@@ -70,8 +69,8 @@ function MemberDetailPage() {
   return <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
     <section className="flex flex-col gap-5 border-b pb-6"><Button variant="ghost" render={<Link to="/members" />} className="-ml-3 w-fit"><ArrowLeft data-icon="inline-start" /> Back to members</Button><div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div className="min-w-0"><Badge variant={member.status === "active" ? "default" : "secondary"} className="mb-3">{member.status}</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">{member.name}</h1><p className="mt-2 flex items-center gap-2 text-muted-foreground"><Phone className="size-4" /> {member.phone_number}</p></div><Button variant="outline" render={<Link to={`/members/${member.id}/edit`} />}><Edit data-icon="inline-start" /> Edit member</Button></div></section>
     <section className="grid gap-4 sm:grid-cols-2">
-      <BalanceCard label="Total savings" value={balancesQuery.isLoading ? "Loading…" : `ETB ${Number(balancesQuery.data?.total_savings || 0).toLocaleString()}`} detail="Opening balance plus deposits" />
-      <BalanceCard label="Total shares" value={balancesQuery.isLoading ? "Loading…" : `ETB ${Number(balancesQuery.data?.total_shares || 0).toLocaleString()}`} detail="Opening balance plus purchases" />
+      <BalanceCard label="Total savings" value={`ETB ${Number(member.total_savings || 0).toLocaleString()}`} detail="Opening balance plus deposits" />
+      <BalanceCard label="Total shares" value={`ETB ${Number(member.total_shares || 0).toLocaleString()}`} detail="Opening balance plus purchases" />
     </section>
     <section className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       <div className="grid gap-6">
