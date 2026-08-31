@@ -15,7 +15,7 @@ const metricLabels = { total_savings: "Savings", total_shares: "Shares", total_i
 
 function TransactionSummaryPage() {
   const { data: members = [] } = useMembers()
-  const [filters, setFilters] = useState({ memberId: "", fiscalYear: new Date().getFullYear(), fiscalMonth: 1 })
+  const [filters, setFilters] = useState({ memberId: "", fiscalYear: new Date().getFullYear() - 7, fiscalMonth: 1 })
   const { data: summary, isFetching, error } = useTransactionSummary(filters)
   const update = (event) => setFilters((current) => ({ ...current, [event.target.name]: event.target.value }))
 

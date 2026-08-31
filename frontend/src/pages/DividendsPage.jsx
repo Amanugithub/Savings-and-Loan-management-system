@@ -4,11 +4,11 @@ import { Calculator, CheckCircle2, Coins, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useMembers } from "@/hooks/use-members"
 import { useCalculateDividends, useDividendHistory, useDividendPreview } from "@/hooks/use-dividends"
-import { ethiopianFiscalYearLabel, formatEthiopianDate } from "@/lib/ethiopian-calendar"
+import { ethiopianFiscalYearLabel, formatEthiopianDate, gregorianFiscalYearToEthiopian } from "@/lib/ethiopian-calendar"
 
 function currentFiscalYear() {
   const now = new Date()
@@ -18,8 +18,8 @@ function currentFiscalYear() {
 function amount(value) { return `ETB ${Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}` }
 
 function DividendsPage() {
-  const [fiscalYear, setFiscalYear] = useState(String(currentFiscalYear()))
-  const yearOptions = useMemo(() => Array.from({ length: 7 }, (_, index) => String(currentFiscalYear() - 3 + index)), [])
+  const [fiscalYear, setFiscalYear] = useState(String(gregorianFiscalYearToEthiopian(currentFiscalYear())))
+  const yearOptions = useMemo(() => Array.from({ length: 7 }, (_, index) => String(gregorianFiscalYearToEthiopian(currentFiscalYear()) - 3 + index)), [])
   const previewQuery = useDividendPreview(fiscalYear)
   const historyQuery = useDividendHistory({ fiscal_year: fiscalYear })
   const { data: members = [] } = useMembers()
@@ -32,7 +32,7 @@ function DividendsPage() {
   const totalSavingsPool = monthly.reduce((sum, row) => sum + Number(row.savings_pool), 0)
   const totalSharePool = monthly.reduce((sum, row) => sum + Number(row.share_pool), 0)
 
-  return <main className="mx-auto flex w-full max-w-7xl flex-col gap-8"><section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><Badge variant="secondary" className="mb-3">Annual allocation</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Dividends</h1><p className="mt-2 max-w-2xl text-muted-foreground">Preview the fiscal-year profit allocation before saving member dividend records.</p></div><label className="flex w-full flex-col gap-2 text-sm font-medium sm:w-60" htmlFor="dividend-fiscal-year">Fiscal year<div className="text-xs font-normal text-muted-foreground">{ethiopianFiscalYearLabel(fiscalYear)}</div><Select value={fiscalYear} onValueChange={setFiscalYear}><SelectTrigger id="dividend-fiscal-year"><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{yearOptions.map((year) => <SelectItem key={year} value={year}>{ethiopianFiscalYearLabel(year)}</SelectItem>)}</SelectGroup></SelectContent></Select></label></section>
+  return <main className="mx-auto flex w-full max-w-7xl flex-col gap-8"><section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><Badge variant="secondary" className="mb-3">Annual allocation</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Dividends</h1><p className="mt-2 max-w-2xl text-muted-foreground">Preview the fiscal-year profit allocation before saving member dividend records.</p></div><label className="flex w-full flex-col gap-2 text-sm font-medium sm:w-60" htmlFor="dividend-fiscal-year">Fiscal year<Select key={fiscalYear} value={fiscalYear} onValueChange={setFiscalYear}><SelectTrigger id="dividend-fiscal-year"><span>{ethiopianFiscalYearLabel(fiscalYear)}</span></SelectTrigger><SelectContent><SelectGroup>{yearOptions.map((year) => <SelectItem key={year} value={year}>{ethiopianFiscalYearLabel(year)}</SelectItem>)}</SelectGroup></SelectContent></Select></label></section>
     {previewQuery.isLoading && <p className="text-sm text-muted-foreground">Calculating fiscal-year preview…</p>}
     {previewQuery.error && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{previewQuery.error.message}</p>}
     {preview && <><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Members eligible" value={preview.perMember.length} icon={Coins} /><MetricCard label="Total profit" value={amount(totalProfit)} icon={Calculator} /><MetricCard label="Savings pool" value={amount(totalSavingsPool)} icon={Coins} /><MetricCard label="Share pool" value={amount(totalSharePool)} icon={Coins} /></section><Card><CardHeader className="flex flex-col gap-4 border-b md:flex-row md:items-end md:justify-between"><div><CardTitle>Calculation preview</CardTitle><CardDescription className="mt-1">The backend calculates profit after expenses, then allocates 65% to savings, 20% to shares, and 15% to reserve.</CardDescription></div><Button onClick={() => calculateMutation.mutate(Number(fiscalYear))} disabled={calculateMutation.isPending}><Calculator data-icon="inline-start" />{calculateMutation.isPending ? "Calculating…" : "Save dividend calculation"}</Button></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Fiscal month</TableHead><TableHead>Month ending</TableHead><TableHead>Revenue</TableHead><TableHead>Expenses</TableHead><TableHead>Profit</TableHead><TableHead className="text-right">Reserve</TableHead></TableRow></TableHeader><TableBody>{monthly.map((row) => <TableRow key={row.fiscal_month}><TableCell>Month {row.fiscal_month}</TableCell><TableCell className="font-amharic text-muted-foreground">{formatEthiopianDate(row.month_end_date)}</TableCell><TableCell>{amount(row.revenue)}</TableCell><TableCell>{amount(row.expenses)}</TableCell><TableCell className="font-medium">{amount(row.profit)}</TableCell><TableCell className="text-right">{amount(row.reserve)}</TableCell></TableRow>)}</TableBody></Table></CardContent></Card></>}
