@@ -57,7 +57,7 @@ curl http://localhost:4000/api/administrators \
   -H "Authorization: Bearer PASTE_TOKEN_HERE"
 ```
 
-Tokens expire after 12 hours — log in again once one expires.
+Tokens expire after 1 hour — log in again once one expires.
 
 ## Try the members endpoint
 
