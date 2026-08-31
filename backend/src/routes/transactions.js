@@ -10,6 +10,8 @@ const router = Router();
 const ALLOWED_TRANSACTION_TYPES = [
   "savings_deposit",
   "share_purchase",
+  "opening_savings_balance",
+  "opening_share_balance",
   "penalty_payment",
   "registration_fee",
   "card_fee",
@@ -47,6 +49,14 @@ function parseIntegerParam(value, name, { min = 0, max } = {}) {
   return { value: parsed };
 }
 
+function parseMoney(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  const cents = Math.round((parsed + Number.EPSILON) * 100);
+  if (Math.abs(parsed - cents / 100) > 1e-9) return null;
+  return cents / 100;
+}
+
 // POST /api/transactions — create a new transaction
 router.post(
   "/",
@@ -74,11 +84,16 @@ router.post(
       return res.status(400).json({ error: "bank_interest_income is an organization-level transaction and cannot reference a member or loan" });
     }
 
-    const parsedAmount = Number(amount);
+    const openingBalanceType = ["opening_savings_balance", "opening_share_balance"].includes(type);
+    if (openingBalanceType && loan_id) {
+      return res.status(400).json({ error: "Opening balance transactions cannot reference a loan" });
+    }
 
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = parseMoney(amount);
+
+    if (parsedAmount === null) {
       return res.status(400).json({
-        error: "Amount must be a positive number",
+        error: "Amount must be a positive number with no more than 2 decimal places",
       });
     }
 
@@ -90,6 +105,15 @@ router.post(
       return res.status(404).json({
         error: "Member not found",
       });
+    }
+
+    if (openingBalanceType) {
+      const existing = db
+        .prepare("SELECT id FROM transactions WHERE member_id = ? AND type = ?")
+        .get(member_id, type);
+      if (existing) {
+        return res.status(409).json({ error: "This member already has an opening balance of this type" });
+      }
     }
 
     if (loan_id) {
@@ -254,6 +278,47 @@ router.get(
         offset,
         has_more: hasMore,
       },
+    });
+  })
+);
+
+// GET /api/transactions/balances — cumulative member savings and share balances
+// This deliberately uses an aggregate query instead of the paginated transaction list.
+router.get(
+  '/balances',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { member_id: memberId } = req.query;
+    if (Array.isArray(memberId)) {
+      return res.status(400).json({ error: 'member_id must be a single value, not an array' });
+    }
+
+    const conditions = ['member_id IS NOT NULL'];
+    const params = [];
+    if (memberId) {
+      conditions.push('member_id = ?');
+      params.push(memberId);
+    }
+
+    const balances = db
+      .prepare(`
+        SELECT
+          ROUND(COALESCE(SUM(CASE
+            WHEN type IN ('savings_deposit', 'opening_savings_balance') THEN amount
+            ELSE 0
+          END), 0), 2) AS total_savings,
+          ROUND(COALESCE(SUM(CASE
+            WHEN type IN ('share_purchase', 'opening_share_balance') THEN amount
+            ELSE 0
+          END), 0), 2) AS total_shares
+        FROM transactions
+        WHERE ${conditions.join(' AND ')}
+      `)
+      .get(...params);
+
+    res.json({
+      total_savings: Number(balances.total_savings || 0),
+      total_shares: Number(balances.total_shares || 0),
     });
   })
 );

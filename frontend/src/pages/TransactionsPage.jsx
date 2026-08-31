@@ -13,8 +13,8 @@ import { useMembers } from "@/hooks/use-members"
 import { useTransactions } from "@/hooks/use-transactions"
 import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
 
-const transactionTypes = ["", "savings_deposit", "share_purchase", "penalty_payment", "registration_fee", "card_fee", "loan_disbursement", "loan_installment", "loan_interest", "loan_insurance", "bank_interest_income"]
-const typeLabels = { savings_deposit: "Savings deposit", share_purchase: "Share purchase", penalty_payment: "Penalty payment", registration_fee: "Registration fee", card_fee: "Card fee", loan_disbursement: "Loan disbursement", loan_installment: "Loan installment", loan_interest: "Loan interest", loan_insurance: "Loan insurance", bank_interest_income: "Bank interest income" }
+const transactionTypes = ["", "savings_deposit", "share_purchase", "opening_savings_balance", "opening_share_balance", "penalty_payment", "registration_fee", "card_fee", "loan_disbursement", "loan_installment", "loan_interest", "loan_insurance", "bank_interest_income"]
+const typeLabels = { savings_deposit: "Savings deposit", share_purchase: "Share purchase", opening_savings_balance: "Opening savings balance", opening_share_balance: "Opening share balance", penalty_payment: "Penalty payment", registration_fee: "Registration fee", card_fee: "Card fee", loan_disbursement: "Loan disbursement", loan_installment: "Loan installment", loan_interest: "Loan interest", loan_insurance: "Loan insurance", bank_interest_income: "Bank interest income" }
 
 function TransactionsPage() {
   const [filters, setFilters] = useState({ type: "", member_id: "", date_from: "", date_to: "", limit: 20, offset: 0 })

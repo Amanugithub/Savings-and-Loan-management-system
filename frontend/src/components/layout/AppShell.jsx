@@ -19,6 +19,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Sidebar,
@@ -39,6 +40,8 @@ import { Separator } from "@/components/ui/separator"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTheme } from "@/context/ThemeContext"
 import { useAuth } from "@/context/AuthContext"
+import { useLanguage } from "@/context/LanguageContext"
+import { LANGUAGES } from "@/lib/language"
 
 const navigationGroups = [
   {
@@ -71,6 +74,7 @@ function AppShell() {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const { admin, logout } = useAuth()
+  const { language, setLanguage } = useLanguage()
 
   return (
     <TooltipProvider>
@@ -142,6 +146,19 @@ function AppShell() {
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>
+          <div data-no-translate>
+            <Select value={language} onValueChange={setLanguage}>
+              <SelectTrigger id="admin-language" size="sm" className="w-auto min-w-24 rounded-xl bg-background dark:bg-sidebar" aria-label="Language">
+                <SelectValue>{LANGUAGES[language].nativeLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent align="end" data-no-translate>
+              <SelectGroup>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="am">አማርኛ</SelectItem>
+              </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
           <Popover>
             <PopoverTrigger render={<Button variant="ghost" size="sm" className="rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
               <Avatar size="sm">

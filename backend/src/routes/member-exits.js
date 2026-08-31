@@ -42,14 +42,14 @@ function calculateExit(memberId, exitDate) {
   }
 
   const savingsReturned = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'savings_deposit' AND member_id = ? AND date <= ?")
+    .prepare("SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM transactions WHERE type IN ('savings_deposit', 'opening_savings_balance') AND member_id = ? AND date <= ?")
     .get(memberId, exitDate).total;
   const sharesReturned = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'share_purchase' AND member_id = ? AND date <= ?")
+    .prepare("SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM transactions WHERE type IN ('share_purchase', 'opening_share_balance') AND member_id = ? AND date <= ?")
     .get(memberId, exitDate).total;
   const dividendOwed = db
     .prepare(
-      `SELECT COALESCE(SUM(savings_dividend + share_dividend), 0) AS total
+      `SELECT ROUND(COALESCE(SUM(savings_dividend + share_dividend), 0), 2) AS total
        FROM dividend_history WHERE member_id = ? AND date_calculated <= ?`
     )
     .get(memberId, exitDate).total;

@@ -67,7 +67,18 @@ curl http://localhost:4000/api/members
 curl -X POST http://localhost:4000/api/members \
   -H "Content-Type: application/json" \
   -d '{"name":"Test Member","gender":"male","phone_number":"0911000000"}'
+
+# Set or reset a member password (requires the admin bearer token)
+curl -X PATCH http://localhost:4000/api/members/MEMBER_ID/password \
+  -H "Authorization: Bearer PASTE_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"new_password":"memberpass123"}'
 ```
+
+Member passwords are stored as bcrypt hashes. Seeded members with a `NULL`
+`password_hash` cannot sign in until an administrator sets a password through
+the password endpoint above. The endpoint returns the updated member profile,
+but never returns the password or its hash.
 
 ## Frontend integration endpoints
 

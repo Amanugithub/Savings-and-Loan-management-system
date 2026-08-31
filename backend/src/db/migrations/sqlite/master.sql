@@ -39,12 +39,12 @@ CREATE TABLE loans (
     member_id TEXT NOT NULL REFERENCES members(id),
     guarantor_member_id TEXT REFERENCES members(id),
     type TEXT NOT NULL CHECK (type IN ('regular', 'self_secured')),
-    principal_amount REAL NOT NULL CHECK (principal_amount > 0),
+    principal_amount NUMERIC NOT NULL CHECK (principal_amount > 0),
     term_years INTEGER NOT NULL CHECK (term_years IN (1, 2, 3, 4, 5)),
-    interest_rate REAL NOT NULL,
-    monthly_installment REAL NOT NULL,
-    monthly_interest_amount REAL NOT NULL,
-    insurance_amount REAL NOT NULL,
+    interest_rate NUMERIC NOT NULL,
+    monthly_installment NUMERIC NOT NULL,
+    monthly_interest_amount NUMERIC NOT NULL,
+    insurance_amount NUMERIC NOT NULL,
     collateral_type TEXT NOT NULL CHECK (collateral_type IN ('guarantor', 'property')),
     disbursement_date TEXT,
     status TEXT NOT NULL DEFAULT 'pending'
@@ -69,12 +69,13 @@ CREATE TABLE transactions (
     loan_id TEXT REFERENCES loans(id),
     recorded_by TEXT NOT NULL REFERENCES administrators(id),
     type TEXT NOT NULL CHECK (type IN (
-        'savings_deposit', 'share_purchase', 'penalty_payment',
+        'savings_deposit', 'share_purchase', 'opening_savings_balance',
+        'opening_share_balance', 'penalty_payment',
         'registration_fee', 'card_fee', 'loan_disbursement',
         'loan_installment', 'loan_interest', 'loan_insurance',
         'member_exit_payout', 'bank_interest_income'
     )),
-    amount REAL NOT NULL CHECK (amount > 0 OR type = 'member_exit_payout'),
+    amount NUMERIC NOT NULL CHECK (amount > 0 OR type = 'member_exit_payout'),
     date TEXT NOT NULL DEFAULT (date('now')),
     fiscal_year INTEGER GENERATED ALWAYS AS (
         CASE WHEN CAST(strftime('%m', date) AS INTEGER) >= 7
@@ -95,6 +96,10 @@ CREATE TABLE transactions (
 CREATE INDEX idx_transactions_member_date ON transactions (member_id, date);
 CREATE INDEX idx_transactions_loan ON transactions (loan_id);
 CREATE INDEX idx_transactions_unsynced ON transactions (synced_at) WHERE synced_at IS NULL;
+CREATE UNIQUE INDEX uq_member_one_opening_savings
+    ON transactions (member_id) WHERE type = 'opening_savings_balance';
+CREATE UNIQUE INDEX uq_member_one_opening_shares
+    ON transactions (member_id) WHERE type = 'opening_share_balance';
 
 CREATE TABLE expenses (
     id TEXT PRIMARY KEY,
@@ -102,7 +107,7 @@ CREATE TABLE expenses (
         'supplies', 'utilities', 'rent', 'maintenance', 'equipment', 'other'
     )),
     description TEXT,
-    amount REAL NOT NULL CHECK (amount > 0),
+    amount NUMERIC NOT NULL CHECK (amount > 0),
     date TEXT NOT NULL DEFAULT (date('now')),
     fiscal_year INTEGER GENERATED ALWAYS AS (
         CASE WHEN CAST(strftime('%m', date) AS INTEGER) >= 7
@@ -126,8 +131,8 @@ CREATE TABLE dividend_history (
     id TEXT PRIMARY KEY,
     member_id TEXT NOT NULL REFERENCES members(id),
     fiscal_year INTEGER NOT NULL,
-    savings_dividend REAL NOT NULL DEFAULT 0,
-    share_dividend REAL NOT NULL DEFAULT 0,
+    savings_dividend NUMERIC NOT NULL DEFAULT 0,
+    share_dividend NUMERIC NOT NULL DEFAULT 0,
     date_calculated TEXT NOT NULL DEFAULT (date('now')),
     synced_at TEXT,
     updated_at TEXT,
@@ -141,11 +146,11 @@ CREATE TABLE member_exits (
     id TEXT PRIMARY KEY,
     member_id TEXT NOT NULL UNIQUE REFERENCES members(id),
     exit_date TEXT NOT NULL,
-    savings_returned REAL NOT NULL,
-    shares_returned REAL NOT NULL,
-    dividend_owed REAL NOT NULL,
-    government_withholding REAL NOT NULL,
-    net_amount_paid REAL NOT NULL,
+    savings_returned NUMERIC NOT NULL,
+    shares_returned NUMERIC NOT NULL,
+    dividend_owed NUMERIC NOT NULL,
+    government_withholding NUMERIC NOT NULL,
+    net_amount_paid NUMERIC NOT NULL,
     synced_at TEXT,
     updated_at TEXT
 );
@@ -192,7 +197,10 @@ SELECT
     SUM(amount) FILTER (WHERE type = 'loan_installment') AS total_installments,
     SUM(amount) FILTER (WHERE type = 'loan_interest') AS total_interest,
     SUM(amount) FILTER (WHERE type = 'penalty_payment') AS total_penalties,
-    SUM(amount) FILTER (WHERE type NOT IN ('member_exit_payout', 'bank_interest_income')) AS total_collected,
+    SUM(amount) FILTER (WHERE type NOT IN (
+        'member_exit_payout', 'bank_interest_income',
+        'opening_savings_balance', 'opening_share_balance'
+    )) AS total_collected,
     SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts,
     SUM(amount) FILTER (WHERE type = 'bank_interest_income') AS total_bank_interest
 FROM transactions
