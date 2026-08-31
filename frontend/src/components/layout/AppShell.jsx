@@ -19,6 +19,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Sidebar,
@@ -144,11 +145,17 @@ function AppShell() {
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>
-          <label className="sr-only" htmlFor="admin-language">Language</label>
-          <select id="admin-language" value={language} onChange={(event) => setLanguage(event.target.value)} style={{ colorScheme: theme }} className="h-9 rounded-lg border border-input bg-background px-2 text-xs font-medium text-foreground dark:border-sidebar-border dark:bg-sidebar dark:text-sidebar-foreground">
-            <option value="en" className="bg-background text-foreground">English</option>
-            <option value="am" className="bg-background text-foreground">አማርኛ</option>
-          </select>
+          <Select value={language} onValueChange={setLanguage}>
+            <SelectTrigger id="admin-language" size="sm" className="w-auto min-w-24 rounded-xl bg-background dark:bg-sidebar" aria-label="Language">
+              <SelectValue>{language === "am" ? "አማርኛ" : "English"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectGroup>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="am">አማርኛ</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
           <Popover>
             <PopoverTrigger render={<Button variant="ghost" size="sm" className="rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
               <Avatar size="sm">
