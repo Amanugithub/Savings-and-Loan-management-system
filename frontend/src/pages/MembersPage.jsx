@@ -3,7 +3,7 @@ import { Link } from "react-router-dom"
 import { ArrowUpRight, Search, UserPlus, Users } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -62,14 +62,14 @@ function MembersPage() {
           {error && <p className="p-6 text-sm text-destructive">{error.status === 401 ? "Sign in to view members." : error.message}</p>}
           {!isLoading && !error && filteredMembers.length === 0 && <Empty className="m-6"><EmptyMedia><Users /></EmptyMedia><EmptyTitle>No members found</EmptyTitle><EmptyDescription>No members match the current filters.</EmptyDescription></Empty>}
           {!isLoading && !error && filteredMembers.length > 0 && <Table>
-            <TableHeader><TableRow><TableHead>ID card number</TableHead><TableHead>Member</TableHead><TableHead>Phone</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead><TableHead className="w-12"><span className="sr-only">Open</span></TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>ID card number</TableHead><TableHead>Member name</TableHead><TableHead>Phone number</TableHead><TableHead>Date joined</TableHead><TableHead>Status</TableHead><TableHead className="w-12"><span className="sr-only">Actions</span></TableHead></TableRow></TableHeader>
             <TableBody>{filteredMembers.map((member) => <TableRow key={member.id}>
               <TableCell className="font-medium tabular-nums">{member.id_card_number || "—"}</TableCell>
               <TableCell><Link to={`/members/${member.id}`} className="font-medium hover:text-primary hover:underline">{member.name}</Link><p className="mt-1 text-xs text-muted-foreground">{member.gender}{member.age ? ` · ${member.age} years` : ""}</p></TableCell>
               <TableCell>{member.phone_number}</TableCell>
               <TableCell className="font-amharic text-muted-foreground">{formatEthiopianDate(member.date_joined)}</TableCell>
               <TableCell><Badge variant={member.status === "active" ? "default" : "secondary"}>{member.status}</Badge></TableCell>
-              <TableCell><Button variant="ghost" size="icon-sm" render={<Link to={`/members/${member.id}`} />} aria-label={`Open ${member.name}`}><ArrowUpRight /></Button></TableCell>
+              <TableCell><Link to={`/members/${member.id}`} className={buttonVariants({ variant: "ghost", size: "icon-sm" })} aria-label={`Open ${member.name}`}><ArrowUpRight /></Link></TableCell>
             </TableRow>)}</TableBody>
           </Table>}
         </CardContent>
