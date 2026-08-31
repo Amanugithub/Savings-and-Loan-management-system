@@ -13,7 +13,7 @@ import { useMember, useResetMemberPassword } from "@/hooks/use-members"
 import { useLoans } from "@/hooks/use-loans"
 import { useTransactions } from "@/hooks/use-transactions"
 import { useDividendHistory } from "@/hooks/use-dividends"
-import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
+import { formatEthiopianDate, gregorianFiscalYearToEthiopian } from "@/lib/ethiopian-calendar"
 
 function MemberDetailPage() {
   const { id } = useParams()
@@ -96,7 +96,7 @@ function MemberDetailPage() {
               {loans.length === 0 && <ActivityEmpty text="No loans" />}
             </ActivityList>
             <ActivityList title="Dividend history" icon={ArrowUpRight}>
-              {dividends.slice(0, 4).map((dividend) => <ActivityRow key={dividend.id} label={`Fiscal year ${dividend.fiscal_year}`} detail={formatEthiopianDate(dividend.date_calculated)} amount={Number(dividend.savings_dividend || 0) + Number(dividend.share_dividend || 0)} outflow={false} />)}
+              {dividends.slice(0, 4).map((dividend) => <ActivityRow key={dividend.id} label={`Ethiopian FY ${gregorianFiscalYearToEthiopian(dividend.fiscal_year)}`} detail={formatEthiopianDate(dividend.date_calculated)} amount={Number(dividend.savings_dividend || 0) + Number(dividend.share_dividend || 0)} outflow={false} />)}
               {dividends.length === 0 && <ActivityEmpty text="No dividend records" />}
             </ActivityList>
           </div>}
