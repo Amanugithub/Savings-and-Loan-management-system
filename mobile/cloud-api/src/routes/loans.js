@@ -9,6 +9,21 @@ const VALID_TERMS = [1, 2, 3, 4, 5];
 const VALID_LOAN_TYPES = ['regular', 'self_secured'];
 const VALID_COLLATERAL_TYPES = ['guarantor', 'property'];
 const INTEREST_RATE_BY_TERM = { 1: 8, 2: 8, 3: 10, 4: 11, 5: 13 };
+const SHARE_PRICE = 3000;
+const MINIMUM_SHARES_FOR_LOAN = 3;
+
+function parseMoney(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return { error: `${name} must be a positive number` };
+  }
+
+  const cents = Math.round((value + Number.EPSILON) * 100);
+  if (Math.abs(value - cents / 100) > 1e-9) {
+    return { error: `${name} must have no more than 2 decimal places` };
+  }
+
+  return { value: cents / 100 };
+}
 
 router.get(
   '/me',
@@ -59,9 +74,11 @@ router.post(
     if (!VALID_LOAN_TYPES.includes(type)) {
       return res.status(400).json({ error: `type must be one of: ${VALID_LOAN_TYPES.join(', ')}` });
     }
-    if (typeof principal_amount !== 'number' || !Number.isFinite(principal_amount) || principal_amount <= 0) {
-      return res.status(400).json({ error: 'principal_amount must be a positive number' });
+    const principalResult = parseMoney(principal_amount, 'principal_amount');
+    if (principalResult.error) {
+      return res.status(400).json({ error: principalResult.error });
     }
+    const principal = principalResult.value;
     if (!VALID_TERMS.includes(term_years)) {
       return res.status(400).json({ error: `term_years must be one of: ${VALID_TERMS.join(', ')}` });
     }
@@ -84,6 +101,19 @@ router.post(
       return res.status(400).json({ error: 'Loans can only be created for active members' });
     }
 
+    const { rows: shareRows } = await pool.query(
+      `SELECT COALESCE(SUM(amount) FILTER (WHERE type IN ('share_purchase', 'opening_share_balance')), 0) AS total
+       FROM transactions WHERE member_id = $1`,
+      [member_id]
+    );
+    const shareBalance = Number(shareRows[0].total);
+    const minimumShareBalance = SHARE_PRICE * MINIMUM_SHARES_FOR_LOAN;
+    if (shareBalance < minimumShareBalance) {
+      return res.status(409).json({
+        error: `Member must have at least ${MINIMUM_SHARES_FOR_LOAN} shares (${minimumShareBalance.toLocaleString()} ETB) before applying for a loan`,
+      });
+    }
+
     if (guarantor_member_id) {
       if (collateral_type !== 'guarantor') {
         return res.status(400).json({
@@ -101,6 +131,19 @@ router.post(
       }
       if (guarantor.status !== 'active') {
         return res.status(400).json({ error: 'The guarantor must be an active member' });
+      }
+
+      const { rows: savingsRows } = await pool.query(
+        `SELECT COALESCE(SUM(amount) FILTER (WHERE type IN ('savings_deposit', 'opening_savings_balance')), 0) AS total
+         FROM transactions WHERE member_id = $1`,
+        [guarantor_member_id]
+      );
+      const guarantorSavings = Number(savingsRows[0].total);
+      const requiredGuarantorSavings = principal * 3;
+      if (guarantorSavings < requiredGuarantorSavings) {
+        return res.status(409).json({
+          error: `Guarantor must have savings of at least ${requiredGuarantorSavings.toLocaleString()} ETB for this loan`,
+        });
       }
 
       const { rows: guaranteedLoans } = await pool.query(
@@ -122,9 +165,9 @@ router.post(
 
     const months = term_years * 12;
     const interest_rate = INTEREST_RATE_BY_TERM[term_years];
-    const monthly_installment = principal_amount / months;
-    const monthly_interest_amount = (principal_amount * interest_rate) / 100 / months;
-    const insurance_amount = principal_amount * 0.01;
+    const monthly_installment = Math.round((principal / months) * 100) / 100;
+    const monthly_interest_amount = Math.round((principal * interest_rate / 100 / months) * 100) / 100;
+    const insurance_amount = Math.round(principal * 0.01 * 100) / 100;
 
     const { rows } = await pool.query(
       `INSERT INTO loans
@@ -137,7 +180,7 @@ router.post(
         member_id,
         guarantor_member_id ?? null,
         type,
-        principal_amount,
+        principal,
         term_years,
         interest_rate,
         monthly_installment,

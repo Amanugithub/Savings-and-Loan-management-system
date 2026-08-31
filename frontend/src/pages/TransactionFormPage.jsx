@@ -12,7 +12,7 @@ import { useMembers } from "@/hooks/use-members"
 import { useCreateTransaction } from "@/hooks/use-transactions"
 import { todayGregorianIso } from "@/lib/ethiopian-calendar"
 
-const types = { savings_deposit: "Savings deposit", share_purchase: "Share purchase", penalty_payment: "Penalty payment", registration_fee: "Registration fee", card_fee: "Card fee", loan_disbursement: "Loan disbursement", loan_installment: "Loan installment", loan_interest: "Loan interest", loan_insurance: "Loan insurance", bank_interest_income: "Bank interest income" }
+const types = { savings_deposit: "Savings deposit", share_purchase: "Share purchase", opening_savings_balance: "Opening savings balance", opening_share_balance: "Opening share balance", penalty_payment: "Penalty payment", registration_fee: "Registration fee", card_fee: "Card fee", loan_disbursement: "Loan disbursement", loan_installment: "Loan installment", loan_interest: "Loan interest", loan_insurance: "Loan insurance", bank_interest_income: "Bank interest income" }
 const initialForm = { type: "savings_deposit", member_id: "", loan_id: "", amount: "", date: todayGregorianIso(), notes: "" }
 
 function TransactionFormPage() {

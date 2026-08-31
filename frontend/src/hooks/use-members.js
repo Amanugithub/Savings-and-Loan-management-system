@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-import { createMember, getMember, getMembers, updateMember } from "@/api/members"
+import { createMember, getMember, getMembers, resetMemberPassword, updateMember } from "@/api/members"
 
 export function useMembers() {
   return useQuery({ queryKey: ["members"], queryFn: getMembers })
@@ -24,6 +24,17 @@ export function useUpdateMember() {
     mutationFn: updateMember,
     onSuccess: (member) => {
       queryClient.setQueryData(["members", member.id], member)
+      queryClient.invalidateQueries({ queryKey: ["members"] })
+    },
+  })
+}
+
+export function useResetMemberPassword() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: resetMemberPassword,
+    onSuccess: (result) => {
+      queryClient.setQueryData(["members", result.member.id], result.member)
       queryClient.invalidateQueries({ queryKey: ["members"] })
     },
   })

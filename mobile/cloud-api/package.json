@@ -1,5 +1,5 @@
 {
-  "name": "sacco-mobile-api",
+  "name": "mobile-api",
   "version": "1.0.0",
   "type": "module",
   "main": "src/app.js",

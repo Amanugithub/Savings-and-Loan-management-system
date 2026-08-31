@@ -63,10 +63,10 @@ function computeDividends(fiscalYear) {
       .get(fiscalYear, fiscalMonth, ...REVENUE_TYPES).total;
 
     const expenseTotal = db
-      .prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE fiscal_year = ? AND fiscal_month = ?')
+      .prepare('SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM expenses WHERE fiscal_year = ? AND fiscal_month = ?')
       .get(fiscalYear, fiscalMonth).total;
 
-    const monthlyProfit = revenue - expenseTotal;
+    const monthlyProfit = Math.round((revenue - expenseTotal) * 100) / 100;
     const distributableProfit = Math.max(0, monthlyProfit);
     const savingsPool = distributableProfit * SAVINGS_SHARE;
     const sharePool = distributableProfit * SHARE_SHARE;
@@ -74,14 +74,14 @@ function computeDividends(fiscalYear) {
 
     const savingsBalances = db
       .prepare(
-        `SELECT member_id, SUM(amount) AS balance FROM transactions
-         WHERE type = 'savings_deposit' AND date <= ? GROUP BY member_id`
+        `SELECT member_id, ROUND(SUM(amount), 2) AS balance FROM transactions
+         WHERE type IN ('savings_deposit', 'opening_savings_balance') AND date <= ? GROUP BY member_id`
       )
       .all(monthEndDate);
     const shareBalances = db
       .prepare(
-        `SELECT member_id, SUM(amount) AS balance FROM transactions
-         WHERE type = 'share_purchase' AND date <= ? GROUP BY member_id`
+        `SELECT member_id, ROUND(SUM(amount), 2) AS balance FROM transactions
+         WHERE type IN ('share_purchase', 'opening_share_balance') AND date <= ? GROUP BY member_id`
       )
       .all(monthEndDate);
 

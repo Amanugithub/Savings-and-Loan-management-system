@@ -67,7 +67,8 @@ CREATE TABLE transactions (
     loan_id UUID REFERENCES loans(id),
     recorded_by UUID NOT NULL REFERENCES administrators(id),
     type VARCHAR(30) NOT NULL CHECK (type IN (
-        'savings_deposit', 'share_purchase', 'penalty_payment',
+        'savings_deposit', 'share_purchase', 'opening_savings_balance',
+        'opening_share_balance', 'penalty_payment',
         'registration_fee', 'card_fee', 'loan_disbursement',
         'loan_installment', 'loan_interest', 'loan_insurance',
         'member_exit_payout', 'bank_interest_income'
@@ -91,6 +92,10 @@ CREATE TABLE transactions (
 
 CREATE INDEX idx_transactions_member_date ON transactions (member_id, date);
 CREATE INDEX idx_transactions_loan ON transactions (loan_id);
+CREATE UNIQUE INDEX uq_member_one_opening_savings
+    ON transactions (member_id) WHERE type = 'opening_savings_balance';
+CREATE UNIQUE INDEX uq_member_one_opening_shares
+    ON transactions (member_id) WHERE type = 'opening_share_balance';
 
 CREATE TABLE expenses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -165,7 +170,10 @@ SELECT
     SUM(amount) FILTER (WHERE type = 'loan_installment') AS total_installments,
     SUM(amount) FILTER (WHERE type = 'loan_interest') AS total_interest,
     SUM(amount) FILTER (WHERE type = 'penalty_payment') AS total_penalties,
-    SUM(amount) FILTER (WHERE type NOT IN ('member_exit_payout', 'bank_interest_income')) AS total_collected,
+    SUM(amount) FILTER (WHERE type NOT IN (
+        'member_exit_payout', 'bank_interest_income',
+        'opening_savings_balance', 'opening_share_balance'
+    )) AS total_collected,
     SUM(amount) FILTER (WHERE type = 'member_exit_payout') AS total_payouts,
     SUM(amount) FILTER (WHERE type = 'bank_interest_income') AS total_bank_interest
 FROM transactions

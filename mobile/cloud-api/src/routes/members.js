@@ -32,8 +32,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const { rows } = await pool.query(
       `SELECT
-         COALESCE(SUM(amount) FILTER (WHERE type = 'savings_deposit'), 0) AS total_savings,
-         COALESCE(SUM(amount) FILTER (WHERE type = 'share_purchase'), 0) AS total_shares,
+         COALESCE(SUM(amount) FILTER (WHERE type IN ('savings_deposit', 'opening_savings_balance')), 0) AS total_savings,
+         COALESCE(SUM(amount) FILTER (WHERE type IN ('share_purchase', 'opening_share_balance')), 0) AS total_shares,
          dividend.latest_dividend,
          loan.status AS loan_status
        FROM transactions

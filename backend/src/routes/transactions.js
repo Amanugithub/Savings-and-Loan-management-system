@@ -10,6 +10,8 @@ const router = Router();
 const ALLOWED_TRANSACTION_TYPES = [
   "savings_deposit",
   "share_purchase",
+  "opening_savings_balance",
+  "opening_share_balance",
   "penalty_payment",
   "registration_fee",
   "card_fee",
@@ -47,6 +49,14 @@ function parseIntegerParam(value, name, { min = 0, max } = {}) {
   return { value: parsed };
 }
 
+function parseMoney(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  const cents = Math.round((parsed + Number.EPSILON) * 100);
+  if (Math.abs(parsed - cents / 100) > 1e-9) return null;
+  return cents / 100;
+}
+
 // POST /api/transactions — create a new transaction
 router.post(
   "/",
@@ -74,11 +84,16 @@ router.post(
       return res.status(400).json({ error: "bank_interest_income is an organization-level transaction and cannot reference a member or loan" });
     }
 
-    const parsedAmount = Number(amount);
+    const openingBalanceType = ["opening_savings_balance", "opening_share_balance"].includes(type);
+    if (openingBalanceType && loan_id) {
+      return res.status(400).json({ error: "Opening balance transactions cannot reference a loan" });
+    }
 
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = parseMoney(amount);
+
+    if (parsedAmount === null) {
       return res.status(400).json({
-        error: "Amount must be a positive number",
+        error: "Amount must be a positive number with no more than 2 decimal places",
       });
     }
 
@@ -90,6 +105,15 @@ router.post(
       return res.status(404).json({
         error: "Member not found",
       });
+    }
+
+    if (openingBalanceType) {
+      const existing = db
+        .prepare("SELECT id FROM transactions WHERE member_id = ? AND type = ?")
+        .get(member_id, type);
+      if (existing) {
+        return res.status(409).json({ error: "This member already has an opening balance of this type" });
+      }
     }
 
     if (loan_id) {

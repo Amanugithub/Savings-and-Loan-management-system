@@ -6,7 +6,7 @@ import { requireMemberAuth } from '../middleware/memberAuth.js';
 const router = Router();
 
 const VALID_TYPES = [
-  'savings_deposit', 'share_purchase', 'penalty_payment',
+  'savings_deposit', 'share_purchase', 'opening_savings_balance', 'opening_share_balance', 'penalty_payment',
   'registration_fee', 'card_fee', 'loan_disbursement',
   'loan_installment', 'loan_interest', 'loan_insurance',
   'member_exit_payout', 'bank_interest_income',
