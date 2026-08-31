@@ -18,6 +18,22 @@ const INTEREST_RATE_BY_TERM = {
   5: 13,
 };
 
+const SHARE_PRICE = 3000;
+const MINIMUM_SHARES_FOR_LOAN = 3;
+
+function parseMoney(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return { error: `${name} must be a positive number` };
+  }
+
+  const cents = Math.round((value + Number.EPSILON) * 100);
+  if (Math.abs(value - cents / 100) > 1e-9) {
+    return { error: `${name} must have no more than 2 decimal places` };
+  }
+
+  return { value: cents / 100 };
+}
+
 function isValidISODate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -101,9 +117,11 @@ router.post(
     if (!VALID_LOAN_TYPES.includes(type)) {
       return res.status(400).json({ error: `type must be one of: ${VALID_LOAN_TYPES.join(', ')}` });
     }
-    if (typeof principal_amount !== 'number' || !Number.isFinite(principal_amount) || principal_amount <= 0) {
-      return res.status(400).json({ error: 'principal_amount must be a positive number' });
+    const principalResult = parseMoney(principal_amount, 'principal_amount');
+    if (principalResult.error) {
+      return res.status(400).json({ error: principalResult.error });
     }
+    const principal = principalResult.value;
     if (!VALID_TERMS.includes(term_years)) {
       return res.status(400).json({ error: `term_years must be one of: ${VALID_TERMS.join(', ')}` });
     }
@@ -123,6 +141,16 @@ router.post(
       return res.status(400).json({ error: 'Loans can only be created for active members' });
     }
 
+    const shareBalance = db
+      .prepare("SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM transactions WHERE member_id = ? AND type IN ('share_purchase', 'opening_share_balance')")
+      .get(member_id).total;
+    const minimumShareBalance = SHARE_PRICE * MINIMUM_SHARES_FOR_LOAN;
+    if (shareBalance < minimumShareBalance) {
+      return res.status(409).json({
+        error: `Member must have at least ${MINIMUM_SHARES_FOR_LOAN} shares (${minimumShareBalance.toLocaleString()} ETB) before applying for a loan`,
+      });
+    }
+
     if (guarantor_member_id) {
       if (collateral_type !== 'guarantor') {
         return res.status(400).json({
@@ -137,6 +165,16 @@ router.post(
       if (guarantor.status !== 'active') {
         return res.status(400).json({ error: 'The guarantor must be an active member' });
       }
+
+      const guarantorSavings = db
+        .prepare("SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM transactions WHERE member_id = ? AND type IN ('savings_deposit', 'opening_savings_balance')")
+        .get(guarantor_member_id).total;
+      const requiredGuarantorSavings = principal * 3;
+      if (guarantorSavings < requiredGuarantorSavings) {
+        return res.status(409).json({
+          error: `Guarantor must have savings of at least ${requiredGuarantorSavings.toLocaleString()} ETB for this loan`,
+        });
+      }
     }
 
     const activeLoan = db
@@ -148,9 +186,9 @@ router.post(
 
     const months = term_years * 12;
     const interest_rate = INTEREST_RATE_BY_TERM[term_years];
-    const monthly_installment = principal_amount / months;
-    const monthly_interest_amount = (principal_amount * interest_rate) / 100 / months;
-    const insurance_amount = principal_amount * 0.01;
+    const monthly_installment = Math.round((principal / months) * 100) / 100;
+    const monthly_interest_amount = Math.round((principal * interest_rate / 100 / months) * 100) / 100;
+    const insurance_amount = Math.round(principal * 0.01 * 100) / 100;
 
     const id = randomUUID();
 
@@ -165,7 +203,7 @@ router.post(
       member_id,
       guarantor_member_id ?? null,
       type,
-      principal_amount,
+      principal,
       term_years,
       interest_rate,
       monthly_installment,
@@ -204,12 +242,34 @@ router.patch(
       if (!member || member.status !== 'active') {
         return res.status(409).json({ error: 'Loans can only be activated for active members' });
       }
+
+      const shareBalance = db
+        .prepare("SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM transactions WHERE member_id = ? AND type IN ('share_purchase', 'opening_share_balance')")
+        .get(loan.member_id).total;
+      const minimumShareBalance = SHARE_PRICE * MINIMUM_SHARES_FOR_LOAN;
+      if (shareBalance < minimumShareBalance) {
+        return res.status(409).json({
+          error: `Member must have at least ${MINIMUM_SHARES_FOR_LOAN} shares (${minimumShareBalance.toLocaleString()} ETB) before a loan can be activated`,
+        });
+      }
+
       if (loan.guarantor_member_id) {
         const guarantor = db.prepare('SELECT status FROM members WHERE id = ?').get(loan.guarantor_member_id);
         if (!guarantor || guarantor.status !== 'active') {
           return res.status(409).json({ error: 'The guarantor must be an active member' });
         }
+
+        const guarantorSavings = db
+          .prepare("SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS total FROM transactions WHERE member_id = ? AND type IN ('savings_deposit', 'opening_savings_balance')")
+          .get(loan.guarantor_member_id).total;
+        const requiredGuarantorSavings = loan.principal_amount * 3;
+        if (guarantorSavings < requiredGuarantorSavings) {
+          return res.status(409).json({
+            error: `Guarantor must have savings of at least ${requiredGuarantorSavings.toLocaleString()} ETB before this loan can be activated`,
+          });
+        }
       }
+
       const activeLoan = db
         .prepare("SELECT id FROM loans WHERE member_id = ? AND status = 'active' AND id <> ?")
         .get(loan.member_id, req.params.id);

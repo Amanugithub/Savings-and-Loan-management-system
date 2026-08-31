@@ -1,4 +1,5 @@
 import { apiRequest } from "@/api/client"
+import { ethiopianFiscalYearToGregorian, gregorianFiscalYearToEthiopian } from "@/lib/ethiopian-calendar"
 
 export function getTransactions(filters = {}) {
   const params = new URLSearchParams()
@@ -8,10 +9,15 @@ export function getTransactions(filters = {}) {
   return apiRequest(`/transactions?${params.toString()}`)
 }
 
+export function getTransactionBalances(memberId) {
+  const query = memberId ? `?member_id=${encodeURIComponent(memberId)}` : ""
+  return apiRequest(`/transactions/balances${query}`)
+}
+
 export function createTransaction(payload) {
   return apiRequest("/transactions", { method: "POST", body: JSON.stringify(payload) })
 }
 
 export function getTransactionSummary({ memberId, fiscalYear, fiscalMonth }) {
-  return apiRequest(`/transactions/summary/${memberId}/${fiscalYear}/${fiscalMonth}`)
+  return apiRequest(`/transactions/summary/${memberId}/${ethiopianFiscalYearToGregorian(fiscalYear)}/${fiscalMonth}`).then((summary) => ({ ...summary, fiscal_year: gregorianFiscalYearToEthiopian(summary.fiscal_year) }))
 }

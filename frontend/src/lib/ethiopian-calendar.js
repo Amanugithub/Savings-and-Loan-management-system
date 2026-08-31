@@ -73,6 +73,24 @@ export function formatEthiopianDateTime(value, options = {}) {
   }).format(date)
 }
 
+// The database stores the Gregorian year in which the July fiscal year
+// starts. The cooperative identifies that same period by its ending
+// Ethiopian year: Ethiopian FY 2018 = Gregorian FY 2025 (2025/2026).
+export function ethiopianFiscalYearToGregorian(ethiopianYear) {
+  const year = Number(ethiopianYear)
+  return Number.isInteger(year) && year > 0 ? year + 7 : null
+}
+
+export function gregorianFiscalYearToEthiopian(gregorianYear) {
+  const year = Number(gregorianYear)
+  return Number.isInteger(year) && year > 0 ? year - 7 : null
+}
+
+export function ethiopianFiscalYearLabel(ethiopianYear) {
+  const year = Number(ethiopianYear)
+  return Number.isInteger(year) && year > 0 ? `${year} (Ethiopian fiscal year)` : "—"
+}
+
 export function todayGregorianIso() {
   const now = new Date()
   return isoDate(utcDate(now.getFullYear(), now.getMonth() + 1, now.getDate()))

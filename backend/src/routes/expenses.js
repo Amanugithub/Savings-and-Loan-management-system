@@ -101,12 +101,14 @@ router.post(
     }
 
     const parsedAmount = Number(amount);
+    const cents = Math.round((parsedAmount + Number.EPSILON) * 100);
 
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || Math.abs(parsedAmount - cents / 100) > 1e-9) {
       return res.status(400).json({
-        error: "Amount must be a positive number",
+        error: "Amount must be a positive number with no more than 2 decimal places",
       });
     }
+    const normalizedAmount = cents / 100;
 
     const id = randomUUID();
 
@@ -148,7 +150,7 @@ router.post(
       id,
       category,
       description ?? null,
-      parsedAmount,
+      normalizedAmount,
       expenseDate,
       recordedBy,
     );

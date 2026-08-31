@@ -12,5 +12,5 @@ export function useSyncStatus() {
 
 export function useRunSync() {
   const queryClient = useQueryClient()
-  return useMutation({ mutationFn: runSync, onSuccess: (result) => { queryClient.setQueryData(["sync-status"], result.health || result); queryClient.invalidateQueries({ queryKey: ["sync-status"] }) } })
+  return useMutation({ mutationFn: runSync, onSuccess: (result) => { queryClient.setQueryData(["sync-status"], result.health || result); queryClient.invalidateQueries({ queryKey: ["sync-status"] }); queryClient.invalidateQueries({ queryKey: ["transaction-balances"] }); queryClient.invalidateQueries({ queryKey: ["transactions"] }) } })
 }
