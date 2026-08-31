@@ -36,6 +36,7 @@ export default function Notifications() {
     <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
       <Pressable style={s.modalBackdrop} onPress={() => setSelected(null)}>
         <View style={s.modalCard}>
+          <View style={s.modalHandle} />
           <View style={s.modalTop}><View style={s.modalIcon}><Ionicons name={selected?.type === 'loan_status' ? 'briefcase-outline' : 'notifications-outline'} size={21} color={themeColors.green} /></View><Pressable onPress={() => setSelected(null)} hitSlop={10} style={s.closeButton}><Ionicons name="close" size={21} color={themeColors.muted} /></Pressable></View>
           <Text style={s.modalTitle}>{selected?.title}</Text>
           <Text style={s.modalDate}>{selected ? formatEthiopianDateTime(selected.created_at, { language }) : ''}</Text>
