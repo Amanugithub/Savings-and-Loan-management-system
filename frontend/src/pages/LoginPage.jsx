@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/context/AuthContext"
+import { useLanguage } from "@/context/LanguageContext"
 import { useTheme } from "@/context/ThemeContext"
 
 function LoginPage() {
   const { login } = useAuth()
+  const { language, setLanguage } = useLanguage()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -41,6 +43,11 @@ function LoginPage() {
       <Button variant="ghost" size="icon" className="absolute right-4 top-4 rounded-full md:right-8 md:top-8" onClick={toggleTheme} aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
         {theme === "dark" ? <Sun /> : <Moon />}
       </Button>
+      <label className="sr-only" htmlFor="login-language">Language</label>
+      <select id="login-language" value={language} onChange={(event) => setLanguage(event.target.value)} className="absolute right-16 top-4 h-9 rounded-lg border bg-background px-2 text-xs font-medium text-foreground md:right-24 md:top-8">
+        <option value="en">English</option>
+        <option value="am">አማርኛ</option>
+      </select>
       <div className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border bg-card shadow-2xl md:grid-cols-[0.9fr_1.1fr]">
         <section className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground md:flex lg:p-14">
           <div className="flex items-center gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary-foreground/15"><Building2 /></div><span className="font-heading text-lg font-semibold">Tokuma Misomaf</span></div>

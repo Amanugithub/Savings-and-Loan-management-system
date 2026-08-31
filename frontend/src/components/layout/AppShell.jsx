@@ -39,6 +39,7 @@ import { Separator } from "@/components/ui/separator"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useTheme } from "@/context/ThemeContext"
 import { useAuth } from "@/context/AuthContext"
+import { useLanguage } from "@/context/LanguageContext"
 
 const navigationGroups = [
   {
@@ -71,6 +72,7 @@ function AppShell() {
   const navigate = useNavigate()
   const { theme, toggleTheme } = useTheme()
   const { admin, logout } = useAuth()
+  const { language, setLanguage } = useLanguage()
 
   return (
     <TooltipProvider>
@@ -142,6 +144,11 @@ function AppShell() {
             <Bell />
             <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" />
           </Button>
+          <label className="sr-only" htmlFor="admin-language">Language</label>
+          <select id="admin-language" value={language} onChange={(event) => setLanguage(event.target.value)} className="h-9 rounded-lg border bg-background px-2 text-xs font-medium text-foreground">
+            <option value="en">English</option>
+            <option value="am">አማርኛ</option>
+          </select>
           <Popover>
             <PopoverTrigger render={<Button variant="ghost" size="sm" className="rounded-full p-1 pr-2 outline-none focus-visible:ring-2 focus-visible:ring-ring" />}>
               <Avatar size="sm">

@@ -146,6 +146,14 @@
     @apply m-0 min-h-svh bg-background text-foreground;
   }
 
+  html.amharic-ui body {
+    font-family: "Addis Sans", "Inter Variable", sans-serif;
+  }
+
+  html.amharic-ui .font-heading {
+    font-family: "Addis Sans", "Geist Variable", sans-serif;
+  }
+
   #root {
     @apply min-h-svh w-full;
   }
