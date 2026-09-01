@@ -6,9 +6,27 @@
     "orientation": "portrait",
     "scheme": "tokuma-misomaf",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-router", "expo-secure-store"],
-    "experiments": { "typedRoutes": true },
-    "ios": { "supportsTablet": true },
-    "android": { "adaptiveIcon": { "backgroundColor": "#0D5C4A" } }
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D5C4A"
+      },
+      "package": "com.tokumamisomaf.mobile"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "10d3042b-ce95-4493-849d-978cb2cdfccf"
+      }
+    }
   }
 }
