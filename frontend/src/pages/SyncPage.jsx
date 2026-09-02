@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress, ProgressIndicator } from "@/components/ui/progress"
+import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useRunSync, useSyncStatus } from "@/hooks/use-settings"
 import { formatEthiopianDateTime } from "@/lib/ethiopian-calendar"
@@ -17,7 +18,37 @@ function SyncPage() {
   const [lastRun, setLastRun] = useState(null)
   const tables = useMemo(() => Object.entries(status?.tables || {}), [status?.tables])
   const pendingRows = status?.pending_rows || 0
-  const run = () => syncMutation.mutate(undefined, { onSuccess: setLastRun })
+  const run = () => {
+  syncMutation.mutate(undefined, {
+    onSuccess: (result) => {
+      setLastRun(result)
+
+      const summary = result?.summary
+
+      if (summary) {
+        const message = `${summary.pushed} pushed, ${summary.pulled} pulled, ${summary.skipped} skipped, ${summary.failed} failed.`
+
+        if (summary.failed > 0) {
+          toast.error("Synchronization completed with errors.", {
+            description: message,
+          })
+        } else {
+          toast.success("Synchronization completed successfully.", {
+            description: message,
+          })
+        }
+      } else {
+        toast.success("Synchronization completed successfully.")
+      }
+    },
+
+    onError: (error) => {
+      toast.error("Synchronization failed.", {
+        description: error.message,
+      })
+    },
+  })
+}
   const failedCount = lastRun?.summary?.failed || 0
   const progressValue = status ? pendingRows === 0 ? 100 : null : null
 
