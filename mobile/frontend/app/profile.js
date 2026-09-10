@@ -20,15 +20,65 @@ export default function Profile() {
   const joined = member?.date_joined ? formatEthiopianDateTime(member.date_joined, { language }) : null;
 
   return <ScrollView style={s.page} contentContainerStyle={s.content}>
-    <Pressable onPress={() => router.back()} hitSlop={8} style={s.back}><Ionicons name="arrow-back" size={22} color={themeColors.ink} /><Text style={[s.backText, font]}>{language === 'am' ? 'ወደ ኋላ' : language === 'om' ? 'Deebi’i' : 'Back'}</Text></Pressable>
+    <Pressable onPress={() => router.back()} hitSlop={8} style={s.back}>
+        <Ionicons name="arrow-back" size={22} color={themeColors.ink} />
+        <Text style={[s.backText, font]}>{language === 'am' ? 'ወደ ኋላ' : language === 'om' ? 'Deebi’i' : 'Back'}</Text>
+    </Pressable>
     <View style={s.hero}>
-      <View style={s.avatar}><Text style={s.avatarText}>{member?.name?.slice(0, 1).toUpperCase()}</Text></View>
-      <View style={s.identity}><Text style={[s.name, font]}>{display(member?.name)}</Text><Text style={s.phone}>{display(member?.phone_number)}</Text><View style={s.status}><View style={s.statusDot} /><Text style={[s.statusText, font]}>{language === 'am' ? 'ንቁ' : language === 'om' ? 'Hojii irra' : 'Active'}</Text></View></View>
+      <View style={s.avatar}>
+        <Text style={s.avatarText}>{member?.name?.slice(0, 1).toUpperCase()}</Text>
+      </View>
+
+      <View style={s.identity}>
+        <Text style={[s.name, font]}>{display(member?.name)}</Text>
+        <Text style={s.phone}>{display(member?.phone_number)}</Text>
+        <View style={s.status}><View style={s.statusDot} />
+          <Text style={[s.statusText, font]}>{language === 'am' ? 'ንቁ' : language === 'om' ? 'Hojii irra' : 'Active'}</Text>
+        </View>
+      </View>
     </View>
-    <View style={s.card}><Text style={[s.label, font]}>{t('personalDetails')}</Text><View style={s.detailGrid}><Detail icon="calendar-outline" label={t('age')} value={member?.age ? String(member.age) : null} fallback={t('notProvided')} /><Detail icon="person-outline" label={t('gender')} value={gender} /><Detail icon="location-outline" label={t('address')} value={member?.address} fallback={t('notProvided')} /><Detail icon="today-outline" label={t('dateJoined')} value={joined} fallback={t('notProvided')} /></View></View>
-    {member?.heir_info && <View style={s.card}><Text style={[s.label, font]}>{t('heirInfo')}</Text><View style={s.infoRow}><View style={s.infoIcon}><Ionicons name="people-outline" size={18} color={themeColors.green} /></View><Text style={[s.infoValue, font]}>{member.heir_info}</Text></View></View>}
-    <View style={s.card}><Text style={[s.label, font]}>{t('language')}</Text><Text style={[s.languageHint, font]}>{t('changeLanguage')}</Text><View style={s.language}><Pressable onPress={() => changeLanguage('en')} style={[s.languageItem, language === 'en' && s.languageActive]}><Text style={[s.languageText, language === 'en' && s.languageActiveText]}>English</Text></Pressable><Pressable onPress={() => changeLanguage('am')} style={[s.languageItem, language === 'am' && s.languageActive]}><Text style={[s.languageText, language === 'am' && s.languageActiveText, language === 'am' && s.amharic]}>አማርኛ</Text></Pressable><Pressable onPress={() => changeLanguage('om')} style={[s.languageItem, language === 'om' && s.languageActive]}><Text style={[s.languageText, language === 'om' && s.languageActiveText]}>Oromo</Text></Pressable></View></View>
-    <View style={s.card}><Text style={[s.label, font]}>{t('appearance')}</Text><View style={s.settingRow}><View style={{ flex: 1 }}><Text style={[s.key, font]}>{t('darkMode')}</Text><Text style={[s.languageHint, font]}>{t('darkModeHint')}</Text></View><Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: themeColors.line, true: themeColors.mintStrong }} thumbColor={isDark ? themeColors.greenBright : themeColors.surface} /></View></View>
+
+    <View style={s.card}>
+      <Text style={[s.label, font]}>{t('personalDetails')}</Text>
+      <View style={s.detailGrid}>
+        <Detail icon="calendar-outline" label={t('age')} value={member?.age ? String(member.age) : null} fallback={t('notProvided')} />
+        <Detail icon="person-outline" label={t('gender')} value={gender} />
+        <Detail icon="location-outline" label={t('address')} value={member?.address} fallback={t('notProvided')} />
+        <Detail icon="today-outline" label={t('dateJoined')} value={joined} fallback={t('notProvided')} />
+      </View>
+    </View>
+    {member?.heir_info && 
+    <View style={s.card}>
+      <Text style={[s.label, font]}>{t('heirInfo')}</Text>
+      <View style={s.infoRow}>
+        <View style={s.infoIcon}>
+          <Ionicons name="people-outline" size={18} color={themeColors.green} />
+        </View>
+        <Text style={[s.infoValue, font]}>{member.heir_info}</Text>
+      </View>
+    </View>}
+    <View style={s.card}><Text style={[s.label, font]}>{t('language')}</Text>
+      <Text style={[s.languageHint, font]}>{t('changeLanguage')}</Text>
+      <View style={s.language}>
+        <Pressable onPress={() => changeLanguage('en')} style={[s.languageItem, language === 'en' && s.languageActive]}>
+          <Text style={[s.languageText, language === 'en' && s.languageActiveText]}>English</Text>
+        </Pressable>
+        <Pressable onPress={() => changeLanguage('am')} style={[s.languageItem, language === 'am' && s.languageActive]}>
+          <Text style={[s.languageText, language === 'am' && s.languageActiveText, language === 'am' && s.amharic]}>አማርኛ</Text>
+        </Pressable>
+        <Pressable onPress={() => changeLanguage('om')} style={[s.languageItem, language === 'om' && s.languageActive]}>
+          <Text style={[s.languageText, language === 'om' && s.languageActiveText]}>Oromo</Text>
+          </Pressable>
+          </View>
+          </View>
+    <View style={s.card}><Text style={[s.label, font]}>{t('appearance')}</Text>
+    <View style={s.settingRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={[s.key, font]}>{t('darkMode')}</Text>
+        <Text style={[s.languageHint, font]}>{t('darkModeHint')}</Text>
+      </View>
+      <Switch value={isDark} onValueChange={toggleTheme} trackColor={{ false: themeColors.line, true: themeColors.mintStrong }} thumbColor={isDark ? themeColors.greenBright : themeColors.surface} /></View>
+    </View>
     <Button variant="secondary" onPress={() => setAlert({ title: t('changePassword'), message: language === 'am' ? 'የይለፍ ቃል መቀየር በቅርቡ ይጨመራል።' : 'Password change is connected to the API and will be added to this profile flow next.' })}><Text style={font}>{t('changePassword')}</Text></Button>
     <Pressable onPress={() => setAlert({ title: t('logOutQuestion'), message: t('logOutBody'), actions: [{ text: t('cancel') }, { text: t('logOut'), variant: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } }] })} style={s.logout}><Text style={[s.logoutText, font]}>{t('logOut')}</Text></Pressable>
     <ThemedAlert visible={!!alert} title={alert?.title} message={alert?.message} actions={alert?.actions} onClose={() => setAlert(null)} />
