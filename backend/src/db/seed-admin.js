@@ -45,10 +45,11 @@ if (existingSeedAdministrator) {
 }
 
 const password_hash = await bcrypt.hash(password, 10);
+const role = 'general_manager';
 
 db.prepare(
-  `INSERT INTO administrators (id, name, username, password_hash, synced_at)
-   VALUES (?, ?, ?, ?, NULL)`
-).run(seedAdministratorId, name, username, password_hash);
+  `INSERT INTO administrators (id, name, username, password_hash, role, synced_at)
+   VALUES (?, ?, ?, ?, ?, NULL)`
+).run(seedAdministratorId, name, username, password_hash, role);
 
 console.log(`Created admin "${username}" (id: ${seedAdministratorId}).`);

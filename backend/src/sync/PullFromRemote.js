@@ -6,7 +6,7 @@ import pool from '../config/postgres.js';
 const PULL_TABLES = [
   {
     name: 'administrators',
-    columns: ['id', 'name', 'username', 'password_hash', 'status', 'created_at', 'updated_at'],
+    columns: ['id', 'name', 'username', 'password_hash', 'role', 'status', 'created_at', 'updated_at'],
     identity: 'username',
   },
   {

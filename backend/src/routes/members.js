@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireRole, INTAKE_LEVEL } from '../middleware/roles.js';
 
 const router = Router();
 const SALT_ROUNDS = 10;
@@ -52,6 +53,7 @@ router.get(
 // POST /api/members — register a new member
 router.post(
   '/',
+  requireRole(...INTAKE_LEVEL),
   asyncHandler(async (req, res) => {
     const {
       name,

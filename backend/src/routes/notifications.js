@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roles.js';
 
 const router = Router();
 
@@ -69,6 +70,7 @@ router.get(
 // the recipient count without creating notification rows.
 router.post(
   '/broadcast/preview',
+  requireRole('chairperson', 'vice_chairperson', 'general_manager'),
   asyncHandler(async (req, res) => {
     const validationError = validateNotificationBody(req.body);
     if (validationError) return res.status(400).json({ error: validationError });
@@ -159,6 +161,7 @@ router.post(
 // someone who's already left the cooperative.
 router.post(
   '/broadcast',
+  requireRole('chairperson', 'vice_chairperson', 'general_manager'),
   asyncHandler(async (req, res) => {
     const validationError = validateNotificationBody(req.body);
     if (validationError) return res.status(400).json({ error: validationError });
