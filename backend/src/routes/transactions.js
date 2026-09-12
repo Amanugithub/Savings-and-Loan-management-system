@@ -24,6 +24,21 @@ const ALLOWED_TRANSACTION_TYPES = [
   "bank_interest_income",
 ];
 
+const CASHIER_TRANSACTION_TYPES = new Set([
+  'savings_deposit',
+  'share_purchase',
+  'opening_savings_balance',
+  'opening_share_balance',
+  'registration_fee',
+  'card_fee',
+  'loan_installment',
+  'loan_interest',
+  'loan_insurance',
+  'penalty_payment',
+]);
+
+const ACCOUNTANT_TRANSACTION_TYPES = new Set(['bank_interest_income']);
+
 function isValidISODate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -87,25 +102,25 @@ router.post(
       });
     }
 
-    const CASHIER_TRANSACTION_TYPES = new Set([
-      "savings_deposit",
-      "share_purchase",
-      "loan_installment",
-    ]);
+    if (type === 'member_exit_payout') {
+      return res
+        .status(400)
+        .json({
+          error: 'member_exit_payout is created by the member exit process',
+        });
+    }
 
-    if (CASHIER_TRANSACTION_TYPES.has(type) && req.admin.role !== "cashier") {
+    const allowed = CASHIER_TRANSACTION_TYPES.has(type)
+      ? req.admin.role === 'cashier'
+      : ACCOUNTANT_TRANSACTION_TYPES.has(type)
+        ? req.admin.role === 'accountant'
+        : false;
+
+    if (!allowed) {
       return res.status(403).json({
         error: "FORBIDDEN_ROLE",
         message: "You do not have permission to perform this action",
       });
-    }
-
-    if (type === "member_exit_payout") {
-      return res
-        .status(400)
-        .json({
-          error: "member_exit_payout is created by the member exit process",
-        });
     }
 
     if (type === "bank_interest_income" && (member_id || loan_id)) {
