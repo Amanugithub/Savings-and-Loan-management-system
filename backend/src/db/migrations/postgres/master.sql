@@ -26,6 +26,15 @@ CREATE TABLE administrators (
     name VARCHAR(150) NOT NULL,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(30) NOT NULL CHECK (role IN (
+        'chairperson',
+        'vice_chairperson',
+        'loan_committee',
+        'cashier',
+        'accountant',
+        'general_manager',
+        'control_audit_committee'
+    )),
     status VARCHAR(20) NOT NULL DEFAULT 'active'
         CHECK (status IN ('active', 'inactive')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -43,23 +52,107 @@ CREATE TABLE loans (
     monthly_installment NUMERIC(12,2) NOT NULL,
     monthly_interest_amount NUMERIC(12,2) NOT NULL,
     insurance_amount NUMERIC(12,2) NOT NULL,
-    collateral_type VARCHAR(20) NOT NULL CHECK (collateral_type IN ('guarantor', 'property')),
+    collateral_type VARCHAR(20) CHECK (
+        collateral_type IS NULL OR collateral_type IN ('guarantor', 'property')
+    ),
     disbursement_date DATE,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
+    status VARCHAR(30) NOT NULL DEFAULT 'awaiting_recommendation'
+        CHECK (status IN (
+            'awaiting_guarantor',
+            'guarantor_declined',
+            'awaiting_recommendation',
+            'recommendation_declined',
+            'awaiting_committee_approval',
+            'rejected',
+            'approved',
+            'active',
+            'closed'
+        )),
+    guarantor_responded_at TIMESTAMPTZ,
+    recommended_by UUID REFERENCES administrators(id),
+    recommended_at TIMESTAMPTZ,
+    declined_by UUID REFERENCES administrators(id),
+    declined_at TIMESTAMPTZ,
+    rejected_by UUID REFERENCES administrators(id),
+    rejected_at TIMESTAMPTZ,
+    approved_by UUID REFERENCES administrators(id),
+    approved_at TIMESTAMPTZ,
+    disbursed_by UUID REFERENCES administrators(id),
+    collateral_document_ref VARCHAR(255),
+    collateral_certifying_authority VARCHAR(255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_guarantor_not_self
-        CHECK (guarantor_member_id IS NULL OR guarantor_member_id <> member_id)
+        CHECK (
+            guarantor_member_id IS NULL
+            OR guarantor_member_id <> member_id
+        ),
+    CONSTRAINT chk_collateral_type
+        CHECK (
+            type = 'self_secured'
+            OR collateral_type IN ('guarantor', 'property')
+        ),
+    CONSTRAINT chk_guarantor_required
+        CHECK (
+            collateral_type <> 'guarantor'
+            OR guarantor_member_id IS NOT NULL
+        )
 );
 
-CREATE UNIQUE INDEX uq_guarantor_one_active_loan
+CREATE UNIQUE INDEX uq_guarantor_one_live_loan
     ON loans (guarantor_member_id)
-    WHERE status = 'active' AND guarantor_member_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_member_one_active_loan
+    WHERE guarantor_member_id IS NOT NULL
+      AND status IN (
+          'awaiting_guarantor',
+          'awaiting_recommendation',
+          'awaiting_committee_approval',
+          'approved',
+          'active'
+      );
+
+CREATE UNIQUE INDEX uq_member_one_live_loan
     ON loans (member_id)
-    WHERE status = 'active';
+    WHERE status IN (
+        'awaiting_guarantor',
+        'awaiting_recommendation',
+        'awaiting_committee_approval',
+        'approved',
+        'active'
+    );
+
 CREATE INDEX idx_loans_member ON loans (member_id);
+CREATE INDEX idx_loans_guarantor ON loans (guarantor_member_id);
+CREATE INDEX idx_loans_status ON loans (status);
+
+CREATE TABLE loan_installments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_id UUID NOT NULL REFERENCES loans(id),
+    installment_number INT NOT NULL CHECK (installment_number > 0),
+    due_date DATE NOT NULL,
+    principal_due NUMERIC(12,2) NOT NULL CHECK (principal_due >= 0),
+    interest_due NUMERIC(12,2) NOT NULL CHECK (interest_due >= 0),
+    insurance_due NUMERIC(12,2) NOT NULL CHECK (insurance_due >= 0),
+    principal_paid NUMERIC(12,2) NOT NULL DEFAULT 0
+        CHECK (principal_paid >= 0),
+    interest_paid NUMERIC(12,2) NOT NULL DEFAULT 0
+        CHECK (interest_paid >= 0),
+    insurance_paid NUMERIC(12,2) NOT NULL DEFAULT 0
+        CHECK (insurance_paid >= 0),
+    status VARCHAR(20) NOT NULL DEFAULT 'unpaid'
+        CHECK (status IN ('unpaid', 'partially_paid', 'paid')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (loan_id, installment_number),
+    CHECK (principal_paid <= principal_due),
+    CHECK (interest_paid <= interest_due),
+    CHECK (insurance_paid <= insurance_due)
+);
+
+CREATE INDEX idx_loan_installments_loan_due
+    ON loan_installments (loan_id, due_date);
+
+CREATE INDEX idx_loan_installments_status
+    ON loan_installments (status);
 
 CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
