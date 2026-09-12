@@ -86,6 +86,32 @@ function getAppliedMigrations() {
   );
 }
 
+function initializeCleanInstall() {
+  const hasMembersTable = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'members'")
+    .get();
+
+  if (hasMembersTable) return false;
+
+  const masterPath = path.join(migrationsDir, 'master.sql');
+  const masterSql = fs.readFileSync(masterPath, 'utf8');
+  const migrationFiles = getMigrationFiles();
+
+  db.transaction(() => {
+    db.exec(masterSql);
+
+    const insert = db.prepare(
+      'INSERT INTO schema_migrations (filename) VALUES (?)'
+    );
+    for (const file of migrationFiles) insert.run(file);
+  })();
+
+  console.log(
+    `Initialized clean SQLite database from master.sql and recorded ${migrationFiles.length} migration(s).`
+  );
+  return true;
+}
+
 function getLegacyReport() {
   const administrators = db
     .prepare(`
@@ -390,6 +416,8 @@ function populateLegacyMaps(roleMap, loanStageMap) {
 }
 
 ensureMigrationTable();
+
+if (initializeCleanInstall()) process.exit(0);
 
 const roleMap = parseJsonEnv('ADMIN_ROLE_MAP');
 const loanStageMap = parseJsonEnv('LEGACY_LOAN_STAGE_MAP');
