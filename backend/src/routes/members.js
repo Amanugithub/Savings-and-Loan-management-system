@@ -87,6 +87,7 @@ router.post(
 // The plaintext password is never stored or returned.
 router.patch(
   '/:id/password',
+  requireRole(...INTAKE_LEVEL),
   asyncHandler(async (req, res) => {
     const { new_password } = req.body ?? {};
 
@@ -112,6 +113,7 @@ router.patch(
 // PATCH /api/members/:id — edit member details (password has a dedicated endpoint)
 router.patch(
   '/:id',
+  requireRole(...INTAKE_LEVEL),
   asyncHandler(async (req, res) => {
     const existing = db.prepare('SELECT id FROM members WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Member not found' });
