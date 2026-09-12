@@ -91,6 +91,35 @@ async function getAppliedMigrations(client) {
   return new Set(result.rows.map((row) => row.filename));
 }
 
+async function initializeCleanInstall(client) {
+  const result = await client.query("SELECT to_regclass('public.members') AS table_name");
+  if (result.rows[0].table_name) return false;
+
+  const masterPath = path.join(migrationsDir, 'master.sql');
+  const masterSql = fs.readFileSync(masterPath, 'utf8');
+  const migrationFiles = getMigrationFiles();
+
+  await client.query('BEGIN');
+  try {
+    await client.query(masterSql);
+    for (const file of migrationFiles) {
+      await client.query(
+        'INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT (filename) DO NOTHING',
+        [file]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  }
+
+  console.log(
+    `Initialized clean PostgreSQL database from master.sql and recorded ${migrationFiles.length} migration(s).`
+  );
+  return true;
+}
+
 async function getLegacyReport(client) {
   const administratorsResult = await client.query(`
     SELECT id, name, username, status
@@ -390,6 +419,8 @@ async function main() {
 
   try {
     await ensureMigrationTable(client);
+
+    if (await initializeCleanInstall(client)) return;
 
     const roleMap = parseJsonEnv('ADMIN_ROLE_MAP');
     const loanStageMap = parseJsonEnv('LEGACY_LOAN_STAGE_MAP');
