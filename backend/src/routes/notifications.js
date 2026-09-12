@@ -7,7 +7,7 @@ import { requireRole } from '../middleware/roles.js';
 
 const router = Router();
 
-const VALID_TYPES = ['payment_due', 'meeting', 'news', 'loan_status'];
+const VALID_TYPES = ['payment_due', 'meeting', 'news', 'loan_status', 'guarantor_request'];
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 100;
 const MAX_TITLE_LENGTH = 150;
@@ -122,6 +122,7 @@ function validateNotificationBody(body = {}) {
 // POST /api/notifications — single recipient
 router.post(
   '/',
+  requireRole('chairperson', 'vice_chairperson', 'general_manager'),
   asyncHandler(async (req, res) => {
     const { member_id, loan_id, title, message, type } = req.body ?? {};
 
