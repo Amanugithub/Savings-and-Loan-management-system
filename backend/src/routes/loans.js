@@ -3,21 +3,13 @@ import { randomUUID } from 'crypto';
 import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireRole, CHAIR_LEVEL, INTAKE_LEVEL } from '../middleware/roles.js';
+import { requireRole, INTAKE_LEVEL } from '../middleware/roles.js';
 
 const router = Router();
 
 const VALID_TERMS = [1, 2, 3, 4, 5];
-
-const VALID_LOAN_TYPES = [
-  'regular',
-  'self_secured',
-];
-
-const VALID_COLLATERAL_TYPES = [
-  'guarantor',
-  'property',
-];
+const VALID_LOAN_TYPES = ['regular', 'self_secured'];
+const VALID_COLLATERAL_TYPES = ['guarantor', 'property'];
 
 const VALID_STATUSES = [
   'awaiting_guarantor',
@@ -31,6 +23,14 @@ const VALID_STATUSES = [
   'closed',
 ];
 
+const LIVE_LOAN_STATUSES = [
+  'awaiting_guarantor',
+  'awaiting_recommendation',
+  'awaiting_committee_approval',
+  'approved',
+  'active',
+];
+
 const INTEREST_RATE_BY_TERM = {
   1: 8,
   2: 8,
@@ -42,6 +42,9 @@ const INTEREST_RATE_BY_TERM = {
 const SHARE_PRICE = 3000;
 const MINIMUM_SHARES_FOR_LOAN = 3;
 
+/**
+ * Parse and validate money values.
+ */
 function parseMoney(value, name) {
   if (
     typeof value !== 'number' ||
@@ -66,6 +69,9 @@ function parseMoney(value, name) {
   };
 }
 
+/**
+ * Validate YYYY-MM-DD.
+ */
 function isValidISODate(value) {
   if (
     typeof value !== 'string' ||
@@ -75,6 +81,7 @@ function isValidISODate(value) {
   }
 
   const [year, month, day] = value.split('-').map(Number);
+
   const daysInMonth = new Date(
     Date.UTC(year, month, 0)
   ).getUTCDate();
@@ -87,76 +94,197 @@ function isValidISODate(value) {
   );
 }
 
-function getShareBalance(memberId) {
-  return db
-    .prepare(
-      `
-        SELECT ROUND(
-          COALESCE(SUM(amount), 0),
-          2
-        ) AS total
-        FROM transactions
-        WHERE member_id = ?
-          AND type IN (
-            'share_purchase',
-            'opening_share_balance'
-          )
-      `
-    )
-    .get(memberId).total;
-}
-
-function getSavingsBalance(memberId) {
-  return db
-    .prepare(
-      `
-        SELECT ROUND(
-          COALESCE(SUM(amount), 0),
-          2
-        ) AS total
-        FROM transactions
-        WHERE member_id = ?
-          AND type IN (
-            'savings_deposit',
-            'opening_savings_balance'
-          )
-      `
-    )
-    .get(memberId).total;
-}
-
-function getMinimumShareBalance() {
-  return SHARE_PRICE * MINIMUM_SHARES_FOR_LOAN;
-}
-
-function validateActiveMember(memberId, errorMessage) {
-  const member = db
-    .prepare(
-      'SELECT id, status FROM members WHERE id = ?'
-    )
-    .get(memberId);
-
-  if (!member) {
-    return {
-      error: 'Member not found',
-    };
+/**
+ * Get the currently active administrator from the database.
+ *
+ * We intentionally do not trust a role stored in the JWT.
+ * The current administrator record is checked from SQLite so
+ * role changes take effect immediately.
+ */
+function getActingAdministrator(req) {
+  if (!req.admin?.id) {
+    return null;
   }
 
-  if (member.status !== 'active') {
-    return {
-      error: errorMessage,
-    };
-  }
-
-  return {
-    member,
-  };
+  return db
+    .prepare(
+      `SELECT id, username, role, status
+       FROM administrators
+       WHERE id = ?`
+    )
+    .get(req.admin.id);
 }
 
-/*
+/**
+ * Check whether the authenticated administrator has one
+ * of the required roles.
+ */
+function requireLoanRole(req, res, allowedRoles) {
+  const administrator = getActingAdministrator(req);
+
+  if (!administrator) {
+    res.status(401).json({
+      error: 'Administrator account not found',
+    });
+
+    return null;
+  }
+
+  if (administrator.status !== 'active') {
+    res.status(403).json({
+      error: 'Administrator account is inactive',
+    });
+
+    return null;
+  }
+
+  if (!allowedRoles.includes(administrator.role)) {
+    res.status(403).json({
+      error: 'You do not have permission to perform this loan action',
+    });
+
+    return null;
+  }
+
+  return administrator;
+}
+
+/**
+ * Add months to a YYYY-MM-DD date while keeping the result
+ * as a valid calendar date.
+ *
+ * Example:
+ * 2026-01-31 + 1 month -> 2026-02-28
+ */
+function addMonthsToDate(dateString, monthsToAdd) {
+  const [year, month, day] = dateString.split('-').map(Number);
+
+  const targetMonthIndex = month - 1 + monthsToAdd;
+
+  const targetYear =
+    year + Math.floor(targetMonthIndex / 12);
+
+  const targetMonth =
+    ((targetMonthIndex % 12) + 12) % 12;
+
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(
+      targetYear,
+      targetMonth + 1,
+      0
+    )
+  ).getUTCDate();
+
+  const targetDay = Math.min(
+    day,
+    lastDayOfTargetMonth
+  );
+
+  return [
+    targetYear,
+    String(targetMonth + 1).padStart(2, '0'),
+    String(targetDay).padStart(2, '0'),
+  ].join('-');
+}
+
+/**
+ * Generate the loan repayment schedule.
+ *
+ * The schedule is generated inside the same SQLite transaction
+ * as the loan disbursement.
+ *
+ * Therefore:
+ *   loan becomes active + schedule created
+ *
+ * or:
+ *   neither change happens.
+ */
+function generateInstallmentSchedule(loan, disbursementDate) {
+  const months = loan.term_years * 12;
+
+  const insertInstallment = db.prepare(
+    `INSERT INTO loan_installments (
+       id,
+       loan_id,
+       installment_number,
+       due_date,
+       principal_due,
+       interest_due,
+       insurance_due,
+       principal_paid,
+       interest_paid,
+       insurance_paid,
+       status,
+       synced_at
+     )
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 'unpaid', NULL)`
+  );
+
+  const monthlyPrincipal =
+    Math.round(
+      (loan.principal_amount / months + Number.EPSILON) * 100
+    ) / 100;
+
+  const monthlyInterest =
+    Math.round(
+      (loan.monthly_interest_amount + Number.EPSILON) * 100
+    ) / 100;
+
+  /*
+   * insurance_amount is the total insurance amount for the loan.
+   * Spread it across the installments and adjust the final
+   * installment for rounding.
+   */
+  const monthlyInsurance =
+    Math.round(
+      (loan.insurance_amount / months + Number.EPSILON) * 100
+    ) / 100;
+
+  let principalScheduled = 0;
+  let insuranceScheduled = 0;
+
+  for (let installmentNumber = 1; installmentNumber <= months; installmentNumber += 1) {
+    const isLastInstallment =
+      installmentNumber === months;
+
+    const principalDue = isLastInstallment
+      ? Math.round(
+          (loan.principal_amount - principalScheduled + Number.EPSILON) * 100
+        ) / 100
+      : monthlyPrincipal;
+
+    const insuranceDue = isLastInstallment
+      ? Math.round(
+          (loan.insurance_amount - insuranceScheduled + Number.EPSILON) * 100
+        ) / 100
+      : monthlyInsurance;
+
+    const interestDue = monthlyInterest;
+
+    const dueDate = addMonthsToDate(
+      disbursementDate,
+      installmentNumber
+    );
+
+    insertInstallment.run(
+      randomUUID(),
+      loan.id,
+      installmentNumber,
+      dueDate,
+      principalDue,
+      interestDue,
+      insuranceDue
+    );
+
+    principalScheduled += principalDue;
+    insuranceScheduled += insuranceDue;
+  }
+}
+
+/**
  * GET /api/loans
  *
- * Any authenticated administrator can read loans.
+ * List loans with optional member/status filters.
  */
 router.get(
   '/',
@@ -203,23 +331,23 @@ router.get(
 
     query += ' ORDER BY created_at DESC';
 
-    const loans = db.prepare(query).all(...params);
-
-    res.json(loans);
+    res.json(
+      db.prepare(query).all(...params)
+    );
   })
 );
 
-/*
+/**
  * GET /api/loans/:id
- *
- * Any authenticated administrator can read a loan.
  */
 router.get(
   '/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
     const loan = db
-      .prepare('SELECT * FROM loans WHERE id = ?')
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
       .get(req.params.id);
 
     if (!loan) {
@@ -232,25 +360,13 @@ router.get(
   })
 );
 
-/*
+/**
  * POST /api/loans
  *
- * Allowed:
- * - cashier
- * - general_manager
+ * Creates a new loan application.
  *
- * Creates a loan application.
- *
- * Workflow:
- *
- * regular + guarantor
- *   -> awaiting_guarantor
- *
- * regular + property
- *   -> awaiting_recommendation
- *
- * self_secured
- *   -> awaiting_recommendation
+ * Guarantor-backed applications start at awaiting_guarantor. Property and
+ * self-secured applications start at awaiting_recommendation.
  */
 router.post(
   '/',
@@ -264,16 +380,9 @@ router.post(
       principal_amount,
       term_years,
       collateral_type,
-      collateral_document_ref,
-      collateral_certifying_authority,
     } = req.body;
 
-    if (
-      !member_id ||
-      !type ||
-      principal_amount === undefined ||
-      !term_years
-    ) {
+    if (!member_id || !type || principal_amount === undefined || !term_years) {
       return res.status(400).json({
         error:
           'member_id, type, principal_amount, and term_years are required',
@@ -305,27 +414,15 @@ router.post(
       });
     }
 
-    /*
-     * Regular loans must use either guarantor or property collateral.
-     * Self-secured loans may have NULL collateral_type.
-     */
-    if (
-      type === 'regular' &&
-      !VALID_COLLATERAL_TYPES.includes(collateral_type)
-    ) {
+    if (type === 'regular' && !VALID_COLLATERAL_TYPES.includes(collateral_type)) {
       return res.status(400).json({
-        error:
-          "Regular loans require collateral_type to be 'guarantor' or 'property'",
+        error: `collateral_type is required for regular loans and must be one of: ${VALID_COLLATERAL_TYPES.join(', ')}`,
       });
     }
 
-    if (
-      collateral_type !== undefined &&
-      collateral_type !== null &&
-      !VALID_COLLATERAL_TYPES.includes(collateral_type)
-    ) {
+    if (type === 'self_secured' && (collateral_type !== undefined || guarantor_member_id)) {
       return res.status(400).json({
-        error: `collateral_type must be one of: ${VALID_COLLATERAL_TYPES.join(', ')}`,
+        error: 'self_secured loans cannot specify collateral_type or guarantor_member_id',
       });
     }
 
@@ -340,16 +437,6 @@ router.post(
     }
 
     if (
-      collateral_type !== 'guarantor' &&
-      guarantor_member_id
-    ) {
-      return res.status(400).json({
-        error:
-          'guarantor_member_id is only allowed when collateral_type is guarantor',
-      });
-    }
-
-    if (
       guarantor_member_id &&
       guarantor_member_id === member_id
     ) {
@@ -359,42 +446,46 @@ router.post(
       });
     }
 
-    if (
-      collateral_type === 'property' &&
-      !collateral_document_ref
-    ) {
+    const member = db
+      .prepare(
+        'SELECT id, status FROM members WHERE id = ?'
+      )
+      .get(member_id);
+
+    if (!member) {
       return res.status(400).json({
         error:
-          'collateral_document_ref is required for property collateral',
+          'member_id does not reference an existing member',
       });
     }
 
-    if (
-      collateral_type === 'property' &&
-      !collateral_certifying_authority
-    ) {
+    if (member.status !== 'active') {
       return res.status(400).json({
         error:
-          'collateral_certifying_authority is required for property collateral',
-      });
-    }
-
-    const memberResult = validateActiveMember(
-      member_id,
-      'Loans can only be created for active members'
-    );
-
-    if (memberResult.error) {
-      return res.status(400).json({
-        error: memberResult.error,
+          'Loans can only be created for active members',
       });
     }
 
     /*
-     * Loan eligibility requires at least three shares.
+     * A borrower must have at least 3 shares before applying.
      */
-    const shareBalance = getShareBalance(member_id);
-    const minimumShareBalance = getMinimumShareBalance();
+    const shareBalance = db
+      .prepare(
+        `SELECT ROUND(
+           COALESCE(SUM(amount), 0),
+           2
+         ) AS total
+         FROM transactions
+         WHERE member_id = ?
+           AND type IN (
+             'share_purchase',
+             'opening_share_balance'
+           )`
+      )
+      .get(member_id).total;
+
+    const minimumShareBalance =
+      SHARE_PRICE * MINIMUM_SHARES_FOR_LOAN;
 
     if (shareBalance < minimumShareBalance) {
       return res.status(409).json({
@@ -406,11 +497,15 @@ router.post(
 
     /*
      * Validate guarantor when guarantor collateral is used.
-     *
-     * We intentionally do NOT make the guarantor's response happen here.
-     * The application waits in awaiting_guarantor.
      */
-    if (collateral_type === 'guarantor') {
+    if (guarantor_member_id) {
+      if (collateral_type !== 'guarantor') {
+        return res.status(400).json({
+          error:
+            'guarantor_member_id is only allowed when collateral_type is guarantor',
+        });
+      }
+
       const guarantor = db
         .prepare(
           'SELECT id, status FROM members WHERE id = ?'
@@ -426,14 +521,28 @@ router.post(
 
       if (guarantor.status !== 'active') {
         return res.status(400).json({
-          error: 'The guarantor must be an active member',
+          error:
+            'The guarantor must be an active member',
         });
       }
 
-      const guarantorSavings =
-        getSavingsBalance(guarantor_member_id);
+      const guarantorSavings = db
+        .prepare(
+          `SELECT ROUND(
+             COALESCE(SUM(amount), 0),
+             2
+           ) AS total
+           FROM transactions
+           WHERE member_id = ?
+             AND type IN (
+               'savings_deposit',
+               'opening_savings_balance'
+             )`
+        )
+        .get(guarantor_member_id).total;
 
-      const requiredGuarantorSavings = principal * 3;
+      const requiredGuarantorSavings =
+        principal * 3;
 
       if (guarantorSavings < requiredGuarantorSavings) {
         return res.status(409).json({
@@ -442,60 +551,32 @@ router.post(
             `${requiredGuarantorSavings.toLocaleString()} ETB for this loan`,
         });
       }
-
-      /*
-       * The unique index also protects this at DB level,
-       * but checking here gives the user a useful error.
-       */
-      const guarantorLiveLoan = db
-        .prepare(
-          `
-            SELECT id
-            FROM loans
-            WHERE guarantor_member_id = ?
-              AND status IN (
-                'awaiting_guarantor',
-                'awaiting_recommendation',
-                'awaiting_committee_approval',
-                'approved',
-                'active'
-              )
-          `
-        )
-        .get(guarantor_member_id);
-
-      if (guarantorLiveLoan) {
-        return res.status(409).json({
-          error:
-            'The guarantor is already guaranteeing another live loan',
-        });
-      }
     }
 
     /*
-     * A member can have only one live loan.
+     * The unique live-loan index should also protect this,
+     * but keeping the application-level check gives a useful
+     * error message.
      */
     const liveLoan = db
       .prepare(
-        `
-          SELECT id
-          FROM loans
-          WHERE member_id = ?
-            AND status IN (
-              'awaiting_guarantor',
-              'awaiting_recommendation',
-              'awaiting_committee_approval',
-              'approved',
-              'active'
-            )
-        `
+        `SELECT id
+         FROM loans
+         WHERE member_id = ?
+           AND status IN (
+             'awaiting_guarantor',
+             'awaiting_recommendation',
+             'awaiting_committee_approval',
+             'approved',
+             'active'
+           )`
       )
       .get(member_id);
 
     if (liveLoan) {
       return res.status(409).json({
         error:
-          'Member already has a live loan application or loan',
+          'Member already has a live loan',
       });
     }
 
@@ -505,50 +586,62 @@ router.post(
       INTEREST_RATE_BY_TERM[term_years];
 
     const monthly_installment =
-      Math.round((principal / months) * 100) / 100;
+      Math.round(
+        (principal / months + Number.EPSILON) * 100
+      ) / 100;
 
     const monthly_interest_amount =
       Math.round(
-        (principal * interest_rate / 100 / months) * 100
+        (
+          principal *
+          interest_rate /
+          100 /
+          months +
+          Number.EPSILON
+        ) * 100
       ) / 100;
 
     const insurance_amount =
-      Math.round(principal * 0.01 * 100) / 100;
-
-    /*
-     * Determine the initial workflow state.
-     */
-    let initialStatus;
-
-    if (collateral_type === 'guarantor') {
-      initialStatus = 'awaiting_guarantor';
-    } else {
-      initialStatus = 'awaiting_recommendation';
-    }
+      Math.round(
+        (principal * 0.01 + Number.EPSILON) * 100
+      ) / 100;
 
     const id = randomUUID();
+    const initialStatus = collateral_type === 'guarantor'
+      ? 'awaiting_guarantor'
+      : 'awaiting_recommendation';
 
     db.prepare(
-      `
-        INSERT INTO loans (
-          id,
-          member_id,
-          guarantor_member_id,
-          type,
-          principal_amount,
-          term_years,
-          interest_rate,
-          monthly_installment,
-          monthly_interest_amount,
-          insurance_amount,
-          collateral_type,
-          status,
-          collateral_document_ref,
-          collateral_certifying_authority,
-          synced_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-      `
+      `INSERT INTO loans (
+         id,
+         member_id,
+         guarantor_member_id,
+         type,
+         principal_amount,
+         term_years,
+         interest_rate,
+         monthly_installment,
+         monthly_interest_amount,
+         insurance_amount,
+         collateral_type,
+         status,
+         synced_at
+       )
+       VALUES (
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         ?,
+         NULL
+       )`
     ).run(
       id,
       member_id,
@@ -561,50 +654,44 @@ router.post(
       monthly_interest_amount,
       insurance_amount,
       collateral_type ?? null,
-      initialStatus,
-      collateral_document_ref ?? null,
-      collateral_certifying_authority ?? null
+      initialStatus
     );
 
     const loan = db
-      .prepare('SELECT * FROM loans WHERE id = ?')
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
       .get(id);
 
     res.status(201).json(loan);
   })
 );
 
-/*
- * PATCH /api/loans/:id/status
+/**
+ * PATCH /api/loans/:id/recommend
  *
- * This endpoint is intentionally kept for API compatibility.
- *
- * The allowed action depends on the requested status:
+ * Chair level only.
  *
  * awaiting_recommendation
- * recommendation_declined
- *   -> chairperson / vice_chairperson
- *
+ *          ↓
  * awaiting_committee_approval
- * rejected
- *   -> loan_committee
- *
- * active
- *   -> cashier
- *
- * closed
- *   -> not assigned by Issue 2 yet
- *
- * No generic administrator can arbitrarily change loan status.
  */
 router.patch(
-  '/:id/status',
+  '/:id/recommend',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { status, disbursement_date } = req.body;
+    const administrator = requireLoanRole(
+      req,
+      res,
+      ['chairperson', 'vice_chairperson']
+    );
+
+    if (!administrator) return;
 
     const loan = db
-      .prepare('SELECT * FROM loans WHERE id = ?')
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
       .get(req.params.id);
 
     if (!loan) {
@@ -613,321 +700,35 @@ router.patch(
       });
     }
 
-    /*
-     * Determine which role owns the requested transition.
-     */
-    const role = req.admin?.role;
-
-    const chairTransitions = [
-      'awaiting_committee_approval',
-      'recommendation_declined',
-    ];
-
-    const committeeTransitions = [
-      'approved',
-      'rejected',
-    ];
-
-    const cashierTransitions = [
-      'active',
-    ];
-
-    /*
-     * Recommendation action.
-     *
-     * awaiting_recommendation -> awaiting_committee_approval
-     * awaiting_recommendation -> recommendation_declined
-     */
-    if (chairTransitions.includes(status)) {
-      if (!CHAIR_LEVEL.includes(role)) {
-        return res.status(403).json({
-          error: 'FORBIDDEN_ROLE',
-          message:
-            'You do not have permission to perform this action',
-        });
-      }
-
-      if (
-        loan.status !== 'awaiting_recommendation'
-      ) {
-        return res.status(400).json({
-          error:
-            `Cannot move loan from '${loan.status}' to '${status}'`,
-        });
-      }
-
-      if (
-        status === 'awaiting_committee_approval'
-      ) {
-        db.prepare(
-          `
-            UPDATE loans
-            SET
-              status = 'awaiting_committee_approval',
-              recommended_by = ?,
-              recommended_at = datetime('now'),
-              updated_at = datetime('now'),
-              synced_at = NULL
-            WHERE id = ?
-          `
-        ).run(req.admin.id, req.params.id);
-      }
-
-      if (
-        status === 'recommendation_declined'
-      ) {
-        db.prepare(
-          `
-            UPDATE loans
-            SET
-              status = 'recommendation_declined',
-              declined_by = ?,
-              declined_at = datetime('now'),
-              updated_at = datetime('now'),
-              synced_at = NULL
-            WHERE id = ?
-          `
-        ).run(req.admin.id, req.params.id);
-      }
-    }
-
-    /*
-     * Committee action.
-     *
-     * awaiting_committee_approval -> approved
-     * awaiting_committee_approval -> rejected
-     */
-    else if (committeeTransitions.includes(status)) {
-      if (role !== 'loan_committee') {
-        return res.status(403).json({
-          error: 'FORBIDDEN_ROLE',
-          message:
-            'You do not have permission to perform this action',
-        });
-      }
-
-      if (
-        loan.status !== 'awaiting_committee_approval'
-      ) {
-        return res.status(400).json({
-          error:
-            `Cannot move loan from '${loan.status}' to '${status}'`,
-        });
-      }
-
-      if (status === 'approved') {
-        db.prepare(
-          `
-            UPDATE loans
-            SET
-              status = 'approved',
-              approved_by = ?,
-              approved_at = datetime('now'),
-              updated_at = datetime('now'),
-              synced_at = NULL
-            WHERE id = ?
-          `
-        ).run(req.admin.id, req.params.id);
-      }
-
-      if (status === 'rejected') {
-        db.prepare(
-          `
-            UPDATE loans
-            SET
-              status = 'rejected',
-              declined_by = ?,
-              declined_at = datetime('now'),
-              updated_at = datetime('now'),
-              synced_at = NULL
-            WHERE id = ?
-          `
-        ).run(req.admin.id, req.params.id);
-      }
-    }
-
-    /*
-     * Disbursement.
-     *
-     * approved -> active
-     *
-     * Only cashier can disburse.
-     */
-    else if (cashierTransitions.includes(status)) {
-      if (role !== 'cashier') {
-        return res.status(403).json({
-          error: 'FORBIDDEN_ROLE',
-          message:
-            'You do not have permission to perform this action',
-        });
-      }
-
-      if (loan.status !== 'approved') {
-        return res.status(400).json({
-          error:
-            `Cannot move loan from '${loan.status}' to 'active'`,
-        });
-      }
-
-      const member = db
-        .prepare(
-          'SELECT status FROM members WHERE id = ?'
-        )
-        .get(loan.member_id);
-
-      if (!member || member.status !== 'active') {
-        return res.status(409).json({
-          error:
-            'Loans can only be activated for active members',
-        });
-      }
-
-      const shareBalance = getShareBalance(
-        loan.member_id
-      );
-
-      const minimumShareBalance =
-        getMinimumShareBalance();
-
-      if (shareBalance < minimumShareBalance) {
-        return res.status(409).json({
-          error:
-            `Member must have at least ${MINIMUM_SHARES_FOR_LOAN} shares ` +
-            `(${minimumShareBalance.toLocaleString()} ETB) ` +
-            `before a loan can be activated`,
-        });
-      }
-
-      /*
-       * Revalidate guarantor conditions at disbursement.
-       * The financial conditions may have changed after approval.
-       */
-      if (loan.guarantor_member_id) {
-        const guarantor = db
-          .prepare(
-            'SELECT status FROM members WHERE id = ?'
-          )
-          .get(loan.guarantor_member_id);
-
-        if (
-          !guarantor ||
-          guarantor.status !== 'active'
-        ) {
-          return res.status(409).json({
-            error:
-              'The guarantor must be an active member',
-          });
-        }
-
-        const guarantorSavings =
-          getSavingsBalance(
-            loan.guarantor_member_id
-          );
-
-        const requiredGuarantorSavings =
-          loan.principal_amount * 3;
-
-        if (
-          guarantorSavings <
-          requiredGuarantorSavings
-        ) {
-          return res.status(409).json({
-            error:
-              `Guarantor must have savings of at least ` +
-              `${requiredGuarantorSavings.toLocaleString()} ETB ` +
-              `before this loan can be activated`,
-          });
-        }
-      }
-
-      const liveLoan = db
-        .prepare(
-          `
-            SELECT id
-            FROM loans
-            WHERE member_id = ?
-              AND status IN (
-                'awaiting_guarantor',
-                'awaiting_recommendation',
-                'awaiting_committee_approval',
-                'approved',
-                'active'
-              )
-              AND id <> ?
-          `
-        )
-        .get(
-          loan.member_id,
-          req.params.id
-        );
-
-      if (liveLoan) {
-        return res.status(409).json({
-          error:
-            'Member already has another live loan',
-        });
-      }
-
-      const disbursementDate =
-        typeof disbursement_date === 'string' &&
-        disbursement_date.trim()
-          ? disbursement_date.trim()
-          : new Date()
-              .toISOString()
-              .slice(0, 10);
-
-      if (
-        disbursement_date !== undefined &&
-        typeof disbursement_date !== 'string'
-      ) {
-        return res.status(400).json({
-          error:
-            'disbursement_date must be a string in YYYY-MM-DD format',
-        });
-      }
-
-      if (!isValidISODate(disbursementDate)) {
-        return res.status(400).json({
-          error:
-            'disbursement_date must be a valid date in YYYY-MM-DD format',
-        });
-      }
-
-      db.prepare(
-        `
-          UPDATE loans
-          SET
-            status = 'active',
-            disbursement_date = ?,
-            disbursed_by = ?,
-            updated_at = datetime('now'),
-            synced_at = NULL
-          WHERE id = ?
-        `
-      ).run(
-        disbursementDate,
-        req.admin.id,
-        req.params.id
-      );
-    }
-
-    /*
-     * Closing is deliberately not assigned to a role here.
-     *
-     * Issue 2 does not define which administrator role is
-     * responsible for closing a loan.
-     */
-    else if (status === 'closed') {
+    if (loan.status !== 'awaiting_recommendation') {
       return res.status(400).json({
         error:
-          'Loan closure role is not defined by the current role matrix',
+          `Cannot recommend loan from '${loan.status}'. ` +
+          `Loan must be 'awaiting_recommendation'.`,
       });
     }
 
-    else {
+    const result = db
+      .prepare(
+        `UPDATE loans
+         SET
+           status = 'awaiting_committee_approval',
+           recommended_by = ?,
+           recommended_at = datetime('now'),
+           updated_at = datetime('now'),
+           synced_at = NULL
+         WHERE id = ?
+           AND status = 'awaiting_recommendation'`
+      )
+      .run(
+        administrator.id,
+        req.params.id
+      );
+
+    if (result.changes !== 1) {
       return res.status(400).json({
         error:
-          `Invalid loan status transition target: '${status}'`,
+          'Loan could not be recommended because its status has already changed',
       });
     }
 
@@ -938,6 +739,549 @@ router.patch(
       .get(req.params.id);
 
     res.json(updated);
+  })
+);
+
+/**
+ * PATCH /api/loans/:id/decline-recommendation
+ *
+ * Chair level only.
+ *
+ * awaiting_recommendation
+ *          ↓
+ * recommendation_declined
+ */
+router.patch(
+  '/:id/decline-recommendation',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const administrator = requireLoanRole(
+      req,
+      res,
+      ['chairperson', 'vice_chairperson']
+    );
+
+    if (!administrator) return;
+
+    const loan = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        error: 'Loan not found',
+      });
+    }
+
+    if (loan.status !== 'awaiting_recommendation') {
+      return res.status(400).json({
+        error:
+          `Cannot decline recommendation from '${loan.status}'. ` +
+          `Loan must be 'awaiting_recommendation'.`,
+      });
+    }
+
+    const result = db
+      .prepare(
+        `UPDATE loans
+         SET
+           status = 'recommendation_declined',
+           declined_by = ?,
+           declined_at = datetime('now'),
+           updated_at = datetime('now'),
+           synced_at = NULL
+         WHERE id = ?
+           AND status = 'awaiting_recommendation'`
+      )
+      .run(
+        administrator.id,
+        req.params.id
+      );
+
+    if (result.changes !== 1) {
+      return res.status(400).json({
+        error:
+          'Loan recommendation could not be declined because its status has already changed',
+      });
+    }
+
+    const updated = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    res.json(updated);
+  })
+);
+
+/**
+ * PATCH /api/loans/:id/committee-approve
+ *
+ * Loan committee only.
+ *
+ * awaiting_committee_approval
+ *          ↓
+ * approved
+ */
+router.patch(
+  '/:id/committee-approve',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const administrator = requireLoanRole(
+      req,
+      res,
+      ['loan_committee']
+    );
+
+    if (!administrator) return;
+
+    const loan = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        error: 'Loan not found',
+      });
+    }
+
+    if (loan.status !== 'awaiting_committee_approval') {
+      return res.status(400).json({
+        error:
+          `Cannot approve loan from '${loan.status}'. ` +
+          `Loan must be 'awaiting_committee_approval'.`,
+      });
+    }
+
+    const result = db
+      .prepare(
+        `UPDATE loans
+         SET
+           status = 'approved',
+           approved_by = ?,
+           approved_at = datetime('now'),
+           updated_at = datetime('now'),
+           synced_at = NULL
+         WHERE id = ?
+           AND status = 'awaiting_committee_approval'`
+      )
+      .run(
+        administrator.id,
+        req.params.id
+      );
+
+    if (result.changes !== 1) {
+      return res.status(400).json({
+        error:
+          'Loan could not be approved because its status has already changed',
+      });
+    }
+
+    const updated = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    res.json(updated);
+  })
+);
+
+/**
+ * PATCH /api/loans/:id/committee-reject
+ *
+ * Loan committee only.
+ *
+ * awaiting_committee_approval
+ *          ↓
+ * rejected
+ */
+router.patch(
+  '/:id/committee-reject',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const administrator = requireLoanRole(
+      req,
+      res,
+      ['loan_committee']
+    );
+
+    if (!administrator) return;
+
+    const loan = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        error: 'Loan not found',
+      });
+    }
+
+    if (loan.status !== 'awaiting_committee_approval') {
+      return res.status(400).json({
+        error:
+          `Cannot reject loan from '${loan.status}'. ` +
+          `Loan must be 'awaiting_committee_approval'.`,
+      });
+    }
+
+    /*
+     * declined_by / declined_at identify the administrator
+     * and timestamp for this negative committee decision.
+     */
+    const result = db
+      .prepare(
+        `UPDATE loans
+         SET
+           status = 'rejected',
+           declined_by = ?,
+           declined_at = datetime('now'),
+           updated_at = datetime('now'),
+           synced_at = NULL
+         WHERE id = ?
+           AND status = 'awaiting_committee_approval'`
+      )
+      .run(
+        administrator.id,
+        req.params.id
+      );
+
+    if (result.changes !== 1) {
+      return res.status(400).json({
+        error:
+          'Loan could not be rejected because its status has already changed',
+      });
+    }
+
+    const updated = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    res.json(updated);
+  })
+);
+
+/**
+ * PATCH /api/loans/:id/disburse
+ *
+ * Cashier only.
+ *
+ * approved
+ *    ↓
+ * active
+ *
+ * This operation is atomic:
+ *
+ *   1. Validate everything
+ *   2. Change loan to active
+ *   3. Create installment schedule
+ *
+ * If schedule creation fails, the loan update is rolled back.
+ */
+router.patch(
+  '/:id/disburse',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const administrator = requireLoanRole(
+      req,
+      res,
+      ['cashier']
+    );
+
+    if (!administrator) return;
+
+    const loan = db
+      .prepare(
+        'SELECT * FROM loans WHERE id = ?'
+      )
+      .get(req.params.id);
+
+    if (!loan) {
+      return res.status(404).json({
+        error: 'Loan not found',
+      });
+    }
+
+    if (loan.status !== 'approved') {
+      return res.status(400).json({
+        error:
+          `Cannot disburse loan from '${loan.status}'. ` +
+          `Loan must be 'approved'.`,
+      });
+    }
+
+    /*
+     * Validate member.
+     */
+    const member = db
+      .prepare(
+        'SELECT status FROM members WHERE id = ?'
+      )
+      .get(loan.member_id);
+
+    if (!member || member.status !== 'active') {
+      return res.status(409).json({
+        error:
+          'Loans can only be disbursed to active members',
+      });
+    }
+
+    /*
+     * Retain the existing 3-share requirement.
+     */
+    const shareBalance = db
+      .prepare(
+        `SELECT ROUND(
+           COALESCE(SUM(amount), 0),
+           2
+         ) AS total
+         FROM transactions
+         WHERE member_id = ?
+           AND type IN (
+             'share_purchase',
+             'opening_share_balance'
+           )`
+      )
+      .get(loan.member_id).total;
+
+    const minimumShareBalance =
+      SHARE_PRICE * MINIMUM_SHARES_FOR_LOAN;
+
+    if (shareBalance < minimumShareBalance) {
+      return res.status(409).json({
+        error:
+          `Member must have at least ${MINIMUM_SHARES_FOR_LOAN} shares ` +
+          `(${minimumShareBalance.toLocaleString()} ETB) before loan disbursement`,
+      });
+    }
+
+    /*
+     * Retain guarantor validation.
+     */
+    if (loan.guarantor_member_id) {
+      const guarantor = db
+        .prepare(
+          'SELECT status FROM members WHERE id = ?'
+        )
+        .get(loan.guarantor_member_id);
+
+      if (!guarantor || guarantor.status !== 'active') {
+        return res.status(409).json({
+          error:
+            'The guarantor must be an active member',
+        });
+      }
+
+      const guarantorSavings = db
+        .prepare(
+          `SELECT ROUND(
+             COALESCE(SUM(amount), 0),
+             2
+           ) AS total
+           FROM transactions
+           WHERE member_id = ?
+             AND type IN (
+               'savings_deposit',
+               'opening_savings_balance'
+             )`
+        )
+        .get(loan.guarantor_member_id).total;
+
+      const requiredGuarantorSavings =
+        loan.principal_amount * 3;
+
+      if (guarantorSavings < requiredGuarantorSavings) {
+        return res.status(409).json({
+          error:
+            `Guarantor must have savings of at least ` +
+            `${requiredGuarantorSavings.toLocaleString()} ETB before loan disbursement`,
+        });
+      }
+    }
+
+    /*
+     * No borrower can have another live loan.
+     */
+    const existingLiveLoan = db
+      .prepare(
+        `SELECT id
+         FROM loans
+         WHERE member_id = ?
+           AND status IN (
+             'awaiting_guarantor',
+             'awaiting_recommendation',
+             'awaiting_committee_approval',
+             'approved',
+             'active'
+           )
+           AND id <> ?`
+      )
+      .get(
+        loan.member_id,
+        loan.id
+      );
+
+    if (existingLiveLoan) {
+      return res.status(409).json({
+        error:
+          'Member already has another live loan',
+      });
+    }
+
+    /*
+     * Determine disbursement date.
+     *
+     * If omitted, use today.
+     */
+    const {
+      disbursement_date,
+    } = req.body;
+
+    const disbursementDate =
+      (
+        typeof disbursement_date === 'string' &&
+        disbursement_date.trim()
+      )
+        ? disbursement_date.trim()
+        : new Date().toISOString().slice(0, 10);
+
+    if (
+      disbursement_date !== undefined &&
+      typeof disbursement_date !== 'string'
+    ) {
+      return res.status(400).json({
+        error:
+          'disbursement_date must be a string in YYYY-MM-DD format',
+      });
+    }
+
+    if (!isValidISODate(disbursementDate)) {
+      return res.status(400).json({
+        error:
+          'disbursement_date must be a valid date in YYYY-MM-DD format',
+      });
+    }
+
+    /*
+     * Protect against an inconsistent database where an
+     * installment schedule already exists.
+     *
+     * A correctly functioning workflow should never reach
+     * this point for an approved loan, but this check gives
+     * us an additional safety barrier.
+     */
+    const existingInstallments = db
+      .prepare(
+        `SELECT id
+         FROM loan_installments
+         WHERE loan_id = ?
+         LIMIT 1`
+      )
+      .get(loan.id);
+
+    if (existingInstallments) {
+      return res.status(409).json({
+        error:
+          'Installment schedule already exists for this loan',
+      });
+    }
+
+    /*
+     * Everything after this point is one atomic transaction.
+     */
+    const disburseLoan = db.transaction(() => {
+      /*
+       * Conditional status transition.
+       *
+       * This is important for duplicate/concurrent requests:
+       *
+       * approved -> active
+       *
+       * can happen only once.
+       */
+      const updateResult = db
+        .prepare(
+          `UPDATE loans
+           SET
+             status = 'active',
+             disbursement_date = ?,
+             disbursed_by = ?,
+             updated_at = datetime('now'),
+             synced_at = NULL
+           WHERE id = ?
+             AND status = 'approved'`
+        )
+        .run(
+          disbursementDate,
+          administrator.id,
+          loan.id
+        );
+
+      if (updateResult.changes !== 1) {
+        throw new Error(
+          'LOAN_STATUS_CHANGED'
+        );
+      }
+
+      /*
+       * Reload the loan after updating it so the schedule
+       * generator works with the final persisted values.
+       */
+      const updatedLoan = db
+        .prepare(
+          'SELECT * FROM loans WHERE id = ?'
+        )
+        .get(loan.id);
+
+      /*
+       * Generate exactly one repayment schedule.
+       */
+      generateInstallmentSchedule(
+        updatedLoan,
+        disbursementDate
+      );
+
+      return updatedLoan;
+    });
+
+    let updatedLoan;
+
+    try {
+      updatedLoan = disburseLoan();
+    } catch (error) {
+      if (error.message === 'LOAN_STATUS_CHANGED') {
+        return res.status(400).json({
+          error:
+            'Loan could not be disbursed because its status has already changed',
+        });
+      }
+
+      throw error;
+    }
+
+    const installments = db
+      .prepare(
+        `SELECT *
+         FROM loan_installments
+         WHERE loan_id = ?
+         ORDER BY installment_number ASC`
+      )
+      .all(updatedLoan.id);
+
+    res.json({
+      loan: updatedLoan,
+      installments,
+    });
   })
 );
 
