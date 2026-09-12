@@ -28,7 +28,17 @@ CREATE TABLE administrators (
     name TEXT NOT NULL,
     username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+    role TEXT NOT NULL CHECK (role IN (
+        'chairperson',
+        'vice_chairperson',
+        'loan_committee',
+        'cashier',
+        'accountant',
+        'general_manager',
+        'control_audit_committee'
+    )),
+    status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'inactive')),
     synced_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT
@@ -38,30 +48,237 @@ CREATE TABLE loans (
     id TEXT PRIMARY KEY,
     member_id TEXT NOT NULL REFERENCES members(id),
     guarantor_member_id TEXT REFERENCES members(id),
-    type TEXT NOT NULL CHECK (type IN ('regular', 'self_secured')),
+
+    type TEXT NOT NULL CHECK (
+        type IN ('regular', 'self_secured')
+    ),
+
     principal_amount NUMERIC NOT NULL CHECK (principal_amount > 0),
     term_years INTEGER NOT NULL CHECK (term_years IN (1, 2, 3, 4, 5)),
     interest_rate NUMERIC NOT NULL,
     monthly_installment NUMERIC NOT NULL,
     monthly_interest_amount NUMERIC NOT NULL,
     insurance_amount NUMERIC NOT NULL,
-    collateral_type TEXT NOT NULL CHECK (collateral_type IN ('guarantor', 'property')),
+
+    collateral_type TEXT CHECK (
+        collateral_type IS NULL
+        OR collateral_type IN ('guarantor', 'property')
+    ),
+
     disbursement_date TEXT,
-    status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
+
+    status TEXT NOT NULL CHECK (
+        status IN (
+            'awaiting_guarantor',
+            'guarantor_declined',
+            'awaiting_recommendation',
+            'recommendation_declined',
+            'awaiting_committee_approval',
+            'rejected',
+            'approved',
+            'active',
+            'closed'
+        )
+    ),
+
+    guarantor_responded_at TEXT,
+
+    recommended_by TEXT REFERENCES administrators(id),
+    recommended_at TEXT,
+
+    declined_by TEXT REFERENCES administrators(id),
+    declined_at TEXT,
+
+    approved_by TEXT REFERENCES administrators(id),
+    approved_at TEXT,
+
+    disbursed_by TEXT REFERENCES administrators(id),
+
+    collateral_document_ref TEXT,
+    collateral_certifying_authority TEXT,
+
     synced_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT,
-    CHECK (guarantor_member_id IS NULL OR guarantor_member_id <> member_id)
+
+    CHECK (
+        guarantor_member_id IS NULL
+        OR guarantor_member_id <> member_id
+    ),
+
+    CHECK (
+        type = 'self_secured'
+        OR collateral_type IN ('guarantor', 'property')
+    ),
+
+    CHECK (
+        collateral_type <> 'guarantor'
+        OR guarantor_member_id IS NOT NULL
+    )
 );
 
-CREATE UNIQUE INDEX uq_guarantor_one_active_loan
+CREATE UNIQUE INDEX uq_guarantor_one_live_loan
     ON loans (guarantor_member_id)
-    WHERE status = 'active' AND guarantor_member_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_member_one_active_loan
+    WHERE guarantor_member_id IS NOT NULL
+      AND status IN (
+          'awaiting_guarantor',
+          'awaiting_recommendation',
+          'awaiting_committee_approval',
+          'approved',
+          'active'
+      );
+
+CREATE UNIQUE INDEX uq_member_one_live_loan
     ON loans (member_id)
-    WHERE status = 'active';
-CREATE INDEX idx_loans_member ON loans (member_id);
+    WHERE status IN (
+        'awaiting_guarantor',
+        'awaiting_recommendation',
+        'awaiting_committee_approval',
+        'approved',
+        'active'
+    );
+
+CREATE INDEX idx_loans_member
+    ON loans (member_id);
+
+CREATE INDEX idx_loans_guarantor
+    ON loans (guarantor_member_id);
+
+CREATE INDEX idx_loans_status
+    ON loans (status);
+
+CREATE TABLE loan_installments (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL REFERENCES loans(id),
+    installment_number INTEGER NOT NULL CHECK (installment_number > 0),
+    due_date TEXT NOT NULL,
+
+    principal_due NUMERIC NOT NULL CHECK (principal_due >= 0),
+    interest_due NUMERIC NOT NULL CHECK (interest_due >= 0),
+    insurance_due NUMERIC NOT NULL CHECK (insurance_due >= 0),
+
+    principal_paid NUMERIC NOT NULL DEFAULT 0
+        CHECK (principal_paid >= 0),
+
+    interest_paid NUMERIC NOT NULL DEFAULT 0
+        CHECK (interest_paid >= 0),
+
+    insurance_paid NUMERIC NOT NULL DEFAULT 0
+        CHECK (insurance_paid >= 0),
+
+    status TEXT NOT NULL DEFAULT 'unpaid'
+        CHECK (status IN ('unpaid', 'partially_paid', 'paid')),
+
+    synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT,
+
+    UNIQUE (loan_id, installment_number),
+
+    CHECK (principal_paid <= principal_due),
+    CHECK (interest_paid <= interest_due),
+    CHECK (insurance_paid <= insurance_due)
+);
+
+CREATE INDEX idx_loan_installments_loan_due
+    ON loan_installments (loan_id, due_date);
+
+CREATE INDEX idx_loan_installments_status
+    ON loan_installments (status);
+
+CREATE INDEX idx_loan_installments_unsynced
+    ON loan_installments (synced_at)
+    WHERE synced_at IS NULL;
+
+
+CREATE TABLE loan_penalties (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL REFERENCES loans(id),
+    penalty_period TEXT NOT NULL,
+    calculation_date TEXT NOT NULL,
+    basis_amount NUMERIC NOT NULL CHECK (basis_amount >= 0),
+    rate NUMERIC NOT NULL DEFAULT 0.02
+        CHECK (rate = 0.02),
+    amount NUMERIC NOT NULL CHECK (amount >= 0),
+
+    synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT,
+
+    UNIQUE (loan_id, penalty_period)
+);
+
+CREATE INDEX idx_loan_penalties_loan_period
+    ON loan_penalties (loan_id, penalty_period);
+
+CREATE INDEX idx_loan_penalties_unsynced
+    ON loan_penalties (synced_at)
+    WHERE synced_at IS NULL;
+
+
+CREATE TABLE loan_payments (
+    id TEXT PRIMARY KEY,
+    loan_id TEXT NOT NULL REFERENCES loans(id),
+    member_id TEXT NOT NULL REFERENCES members(id),
+    amount NUMERIC NOT NULL CHECK (amount > 0),
+    payment_date TEXT NOT NULL,
+    recorded_by TEXT NOT NULL REFERENCES administrators(id),
+    notes TEXT,
+
+    synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT
+);
+
+CREATE INDEX idx_loan_payments_loan_date
+    ON loan_payments (loan_id, payment_date);
+
+CREATE INDEX idx_loan_payments_member
+    ON loan_payments (member_id);
+
+CREATE INDEX idx_loan_payments_unsynced
+    ON loan_payments (synced_at)
+    WHERE synced_at IS NULL;
+
+
+CREATE TABLE loan_payment_allocations (
+    id TEXT PRIMARY KEY,
+    payment_id TEXT NOT NULL REFERENCES loan_payments(id),
+    loan_id TEXT NOT NULL REFERENCES loans(id),
+
+    bucket TEXT NOT NULL CHECK (
+        bucket IN (
+            'collection_expense',
+            'interest_penalty',
+            'principal'
+        )
+    ),
+
+    amount NUMERIC NOT NULL CHECK (amount > 0),
+
+    installment_id TEXT REFERENCES loan_installments(id),
+    penalty_id TEXT REFERENCES loan_penalties(id),
+
+    synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT
+);
+
+CREATE INDEX idx_loan_payment_allocations_payment
+    ON loan_payment_allocations (payment_id);
+
+CREATE INDEX idx_loan_payment_allocations_loan
+    ON loan_payment_allocations (loan_id);
+
+CREATE INDEX idx_loan_payment_allocations_installment
+    ON loan_payment_allocations (installment_id);
+
+CREATE INDEX idx_loan_payment_allocations_penalty
+    ON loan_payment_allocations (penalty_id);
+
+CREATE INDEX idx_loan_payment_allocations_unsynced
+    ON loan_payment_allocations (synced_at)
+    WHERE synced_at IS NULL;
 
 CREATE TABLE transactions (
     id TEXT PRIMARY KEY,
@@ -120,12 +337,15 @@ CREATE TABLE expenses (
              ELSE CAST(strftime('%m', date) AS INTEGER) + 6 END
     ) STORED,
     recorded_by TEXT NOT NULL REFERENCES administrators(id),
+    loan_id TEXT REFERENCES loans(id),
     synced_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT
 );
 
 CREATE INDEX idx_expenses_unsynced ON expenses (synced_at) WHERE synced_at IS NULL;
+CREATE INDEX idx_expenses_loan
+    ON expenses (loan_id);
 
 CREATE TABLE dividend_history (
     id TEXT PRIMARY KEY,
@@ -164,7 +384,13 @@ CREATE TABLE notifications (
     loan_id TEXT REFERENCES loans(id),
     title TEXT NOT NULL,
     message TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('payment_due', 'meeting', 'news', 'loan_status')),
+    type TEXT NOT NULL CHECK (type IN (
+    'payment_due',
+    'meeting',
+    'news',
+    'loan_status',
+    'guarantor_request'
+)),
     is_read INTEGER NOT NULL DEFAULT 0,
     synced_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),

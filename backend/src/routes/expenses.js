@@ -2,6 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import db from "../config/sqlite.js";
 import { requireAuth } from "../middleware/auth.js";
+import { requireRole } from "../middleware/roles.js";
 import { asyncHandler } from "../middleware/errorHandler.js";
 
 const router = Router();
@@ -85,6 +86,7 @@ function isValidISODate(value) {
 router.post(
   "/",
   requireAuth,
+  requireRole("accountant"),
   asyncHandler(async (req, res) => {
     const { category, amount, description, date } = req.body;
 
