@@ -45,14 +45,22 @@ CREATE TABLE loans (
     insurance_amount NUMERIC(12,2) NOT NULL,
     collateral_type VARCHAR(20) NOT NULL CHECK (collateral_type IN ('guarantor', 'property')),
     disbursement_date DATE,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
+    guarantor_responded_at TIMESTAMPTZ,
+    status VARCHAR(30) NOT NULL DEFAULT 'pending'
+        CHECK (status IN (
+            'pending',
+            'awaiting_guarantor',
+            'awaiting_recommendation',
+            'guarantor_declined',
+            'active',
+            'closed',
+            'rejected'
+        )),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT chk_guarantor_not_self
         CHECK (guarantor_member_id IS NULL OR guarantor_member_id <> member_id)
 );
-
 CREATE UNIQUE INDEX uq_guarantor_one_active_loan
     ON loans (guarantor_member_id)
     WHERE status = 'active' AND guarantor_member_id IS NOT NULL;
@@ -144,9 +152,13 @@ CREATE TABLE notifications (
     loan_id UUID REFERENCES loans(id),
     title VARCHAR(150) NOT NULL,
     message VARCHAR(500) NOT NULL,
-    type VARCHAR(20) NOT NULL CHECK (type IN (
-        'payment_due', 'meeting', 'news', 'loan_status'
-    )),
+    type VARCHAR(30) NOT NULL CHECK (type IN (
+    'payment_due',
+    'meeting',
+    'news',
+    'loan_status',
+    'guarantor_request'
+)),
     is_read BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

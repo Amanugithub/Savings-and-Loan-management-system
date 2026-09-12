@@ -15,62 +15,6 @@ const ALLOWED_EXPENSE_CATEGORIES = [
   "other",
 ];
 
-// GET /api/expenses
-// Returns all expenses, most recent first.
-// Optional filter: ?category=...
-router.get(
-  "/",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const { category } = req.query;
-
-    if (Array.isArray(category)) {
-      return res.status(400).json({
-        error: "category must be a single value, not an array",
-      });
-    }
-
-    if (category && !ALLOWED_EXPENSE_CATEGORIES.includes(category)) {
-      return res.status(400).json({
-        error: `category must be one of: ${ALLOWED_EXPENSE_CATEGORIES.join(", ")}`,
-      });
-    }
-
-    let query = "SELECT * FROM expenses";
-    const params = [];
-
-    if (category) {
-      query += " WHERE category = ?";
-      params.push(category);
-    }
-
-    query += " ORDER BY date DESC, created_at DESC";
-
-    const expenses = db.prepare(query).all(...params);
-
-    res.json(expenses);
-  }),
-);
-
-// GET /api/expenses/:id
-router.get(
-  "/:id",
-  requireAuth,
-  asyncHandler(async (req, res) => {
-    const expense = db
-      .prepare("SELECT * FROM expenses WHERE id = ?")
-      .get(req.params.id);
-
-    if (!expense) {
-      return res.status(404).json({
-        error: "Expense not found",
-      });
-    }
-
-    res.json(expense);
-  }),
-);
-
 function isValidISODate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
@@ -110,22 +54,12 @@ router.post(
 
     const id = randomUUID();
 
-    const expenseDate = date === undefined || date === null || date === ""
-      ? new Date().toISOString().slice(0, 10)
-      : date;
+    const expenseDate = date ?? new Date().toISOString().slice(0, 10);
 
     if (!isValidISODate(expenseDate)) {
       return res.status(400).json({
         error: "Date must be a valid date in YYYY-MM-DD format",
       });
-    }
-
-    if (description !== undefined && description !== null) {
-      if (typeof description !== "string" || description.length > 255) {
-        return res.status(400).json({
-          error: "description must be a string of at most 255 characters",
-        });
-      }
     }
 
     const recordedBy = req.admin.id;
@@ -139,10 +73,9 @@ router.post(
     amount,
     date,
     recorded_by,
-    updated_at,
     synced_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, datetime('now'), NULL)
+  VALUES (?, ?, ?, ?, ?, ?, NULL)
 `,
     ).run(
       id,

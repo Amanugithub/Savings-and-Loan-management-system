@@ -47,8 +47,17 @@ CREATE TABLE loans (
     insurance_amount REAL NOT NULL,
     collateral_type TEXT NOT NULL CHECK (collateral_type IN ('guarantor', 'property')),
     disbursement_date TEXT,
+    guarantor_responded_at TEXT,
     status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'active', 'closed', 'rejected')),
+        CHECK (status IN (
+            'pending',
+            'awaiting_guarantor',
+            'awaiting_recommendation',
+            'guarantor_declined',
+            'active',
+            'closed',
+            'rejected'
+        )),
     synced_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT,
@@ -159,7 +168,13 @@ CREATE TABLE notifications (
     loan_id TEXT REFERENCES loans(id),
     title TEXT NOT NULL,
     message TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('payment_due', 'meeting', 'news', 'loan_status')),
+    type TEXT NOT NULL CHECK (type IN (
+        'payment_due',
+        'meeting',
+        'news',
+        'loan_status',
+        'guarantor_request'
+    )),
     is_read INTEGER NOT NULL DEFAULT 0,
     synced_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
