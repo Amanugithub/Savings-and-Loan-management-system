@@ -78,6 +78,16 @@ function parseMoney(value) {
   return cents / 100;
 }
 
+function getTransactionWarnings(type, amount) {
+  const warnings = [];
+  const rule = (code, message, limit) => warnings.push({ code, message, observed_amount: amount, limit });
+  if (type === 'registration_fee' && amount !== 400) rule('REGISTRATION_FEE_DIFFERS_FROM_GUIDELINE', 'Registration fee differs from the normal 400 ETB guideline.', 400);
+  if (type === 'card_fee' && amount !== 150) rule('CARD_FEE_DIFFERS_FROM_GUIDELINE', 'Card fee differs from the normal 150 ETB guideline.', 150);
+  if (type === 'savings_deposit' && amount < 300) rule('MONTHLY_SAVINGS_BELOW_GUIDELINE', 'Monthly savings deposit is below the normal 300 ETB guideline.', 300);
+  if (type === 'savings_deposit' && amount > 2000) rule('MONTHLY_SAVINGS_ABOVE_GUIDELINE', 'Monthly savings deposit exceeds the normal 2,000 ETB guideline.', 2000);
+  return warnings;
+}
+
 // POST /api/transactions — create a new transaction
 router.post(
   "/",
@@ -231,7 +241,7 @@ router.post(
       .prepare("SELECT * FROM transactions WHERE id = ?")
       .get(id);
 
-    return res.status(201).json(transaction);
+    return res.status(201).json({ data: transaction, warnings: getTransactionWarnings(type, parsedAmount) });
   }),
 );
 
