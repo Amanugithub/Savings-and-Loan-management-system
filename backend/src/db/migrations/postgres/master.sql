@@ -43,7 +43,12 @@ CREATE TABLE loans (
     monthly_installment NUMERIC(12,2) NOT NULL,
     monthly_interest_amount NUMERIC(12,2) NOT NULL,
     insurance_amount NUMERIC(12,2) NOT NULL,
-    collateral_type VARCHAR(20) NOT NULL CHECK (collateral_type IN ('guarantor', 'property')),
+   collateral_type VARCHAR(20) NOT NULL
+        CHECK (collateral_type IN ('guarantor', 'property')),
+
+    collateral_document_ref VARCHAR(255),
+    collateral_certifying_authority VARCHAR(255),
+
     disbursement_date DATE,
     guarantor_responded_at TIMESTAMPTZ,
     status VARCHAR(30) NOT NULL DEFAULT 'pending'
