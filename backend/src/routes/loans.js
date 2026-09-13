@@ -41,6 +41,8 @@ const INTEREST_RATE_BY_TERM = {
 
 const SHARE_PRICE = 3000;
 const MINIMUM_SHARES_FOR_LOAN = 3;
+const LOAN_AMOUNT_WARNING_LIMIT = 50000;
+const ANNUAL_DISBURSEMENT_WARNING_LIMIT = 2000000;
 
 /**
  * Parse and validate money values.
@@ -92,6 +94,28 @@ function isValidISODate(value) {
     day >= 1 &&
     day <= daysInMonth
   );
+}
+
+function createLoanNotification({ memberId, loanId, title, message, type }) {
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO notifications
+      (id, member_id, loan_id, title, message, type, is_read, synced_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 0, NULL, datetime('now'))`
+  ).run(id, memberId, loanId, title, message, type);
+}
+
+function getFiscalYearRange(dateString) {
+  const [year, month] = dateString.split('-').map(Number);
+  return month >= 7
+    ? { start: `${year}-07-01`, end: `${year + 1}-07-01` }
+    : { start: `${year - 1}-07-01`, end: `${year}-07-01` };
+}
+
+function sixMonthsBefore(dateString) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() - 6);
+  return date.toISOString().slice(0, 10);
 }
 
 /**
@@ -380,6 +404,8 @@ router.post(
       principal_amount,
       term_years,
       collateral_type,
+      collateral_document_ref,
+      collateral_certifying_authority,
     } = req.body;
 
     if (!member_id || !type || principal_amount === undefined || !term_years) {
@@ -420,7 +446,7 @@ router.post(
       });
     }
 
-    if (type === 'self_secured' && (collateral_type !== undefined || guarantor_member_id)) {
+    if (type === 'self_secured' && (collateral_type != null || guarantor_member_id)) {
       return res.status(400).json({
         error: 'self_secured loans cannot specify collateral_type or guarantor_member_id',
       });
@@ -446,9 +472,10 @@ router.post(
       });
     }
 
+    const applicationDate = new Date().toISOString().slice(0, 10);
     const member = db
       .prepare(
-        'SELECT id, status FROM members WHERE id = ?'
+        'SELECT id, status, date_joined FROM members WHERE id = ?'
       )
       .get(member_id);
 
@@ -463,6 +490,12 @@ router.post(
       return res.status(400).json({
         error:
           'Loans can only be created for active members',
+      });
+    }
+
+    if (!member.date_joined || member.date_joined > sixMonthsBefore(applicationDate)) {
+      return res.status(409).json({
+        error: 'Member must have been active for at least six months before applying for a loan',
       });
     }
 
@@ -551,6 +584,18 @@ router.post(
             `${requiredGuarantorSavings.toLocaleString()} ETB for this loan`,
         });
       }
+
+      const guaranteedLoan = db.prepare(
+        `SELECT id FROM loans
+         WHERE guarantor_member_id = ?
+           AND status IN ('awaiting_guarantor', 'awaiting_recommendation',
+                          'awaiting_committee_approval', 'approved', 'active')`
+      ).get(guarantor_member_id);
+      if (guaranteedLoan) {
+        return res.status(409).json({
+          error: 'Guarantor already has a live guaranteed loan',
+        });
+      }
     }
 
     /*
@@ -607,6 +652,29 @@ router.post(
       ) / 100;
 
     const id = randomUUID();
+    const warnings = [];
+    if (principal > LOAN_AMOUNT_WARNING_LIMIT) {
+      warnings.push({
+        code: 'LOAN_AMOUNT_ABOVE_GUIDELINE',
+        message: 'Loan amount exceeds the normal 50,000 ETB guideline.',
+        observed_amount: principal,
+        limit: LOAN_AMOUNT_WARNING_LIMIT,
+      });
+    }
+    const fiscalYear = getFiscalYearRange(applicationDate);
+    const disbursed = db.prepare(
+      `SELECT COALESCE(SUM(amount), 0) AS total FROM transactions
+       WHERE type = 'loan_disbursement' AND date >= ? AND date < ?`
+    ).get(fiscalYear.start, fiscalYear.end);
+    const proposedAnnualTotal = Number(disbursed.total || 0) + principal;
+    if (proposedAnnualTotal > ANNUAL_DISBURSEMENT_WARNING_LIMIT) {
+      warnings.push({
+        code: 'ANNUAL_LOAN_DISBURSEMENT_LIMIT_EXCEEDED',
+        message: 'Current fiscal year disbursements plus this loan exceed the 2,000,000 ETB guideline.',
+        observed_amount: proposedAnnualTotal,
+        limit: ANNUAL_DISBURSEMENT_WARNING_LIMIT,
+      });
+    }
     const initialStatus = collateral_type === 'guarantor'
       ? 'awaiting_guarantor'
       : 'awaiting_recommendation';
@@ -624,10 +692,14 @@ router.post(
          monthly_interest_amount,
          insurance_amount,
          collateral_type,
+         collateral_document_ref,
+         collateral_certifying_authority,
          status,
          synced_at
        )
        VALUES (
+         ?,
+         ?,
          ?,
          ?,
          ?,
@@ -654,8 +726,20 @@ router.post(
       monthly_interest_amount,
       insurance_amount,
       collateral_type ?? null,
+      collateral_document_ref ?? null,
+      collateral_certifying_authority ?? null,
       initialStatus
     );
+
+    if (collateral_type === 'guarantor' && guarantor_member_id) {
+      createLoanNotification({
+        memberId: guarantor_member_id,
+        loanId: id,
+        title: 'Guarantor consent required',
+        message: 'A member has listed you as a guarantor for a loan. Please review and respond.',
+        type: 'guarantor_request',
+      });
+    }
 
     const loan = db
       .prepare(
@@ -663,7 +747,52 @@ router.post(
       )
       .get(id);
 
-    res.status(201).json(loan);
+    res.status(201).json({ data: loan, warnings });
+  })
+);
+
+/**
+ * PATCH /api/loans/:id/guarantor-response
+ * Office administrators may record consent; mobile member consent is exposed
+ * by the cloud API. The conditional update makes retries idempotent-safe.
+ */
+router.patch(
+  '/:id/guarantor-response',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (!getActingAdministrator(req)) {
+      return res.status(403).json({ error: 'FORBIDDEN_ROLE', message: 'Administrator authentication required' });
+    }
+    const { decision } = req.body ?? {};
+    if (!['approve', 'decline'].includes(decision)) {
+      return res.status(400).json({ error: 'decision must be either approve or decline' });
+    }
+    const loan = db.prepare('SELECT * FROM loans WHERE id = ?').get(req.params.id);
+    if (!loan) return res.status(404).json({ error: 'Loan not found' });
+    if (loan.status !== 'awaiting_guarantor' || !loan.guarantor_member_id) {
+      return res.status(409).json({ error: 'Loan is not awaiting guarantor consent' });
+    }
+    const nextStatus = decision === 'approve' ? 'awaiting_recommendation' : 'guarantor_declined';
+    const update = db.transaction(() => {
+      const result = db.prepare(
+        `UPDATE loans SET status = ?, guarantor_responded_at = datetime('now'),
+         updated_at = datetime('now'), synced_at = NULL
+         WHERE id = ? AND status = 'awaiting_guarantor'`
+      ).run(nextStatus, loan.id);
+      if (result.changes !== 1) return false;
+      createLoanNotification({
+        memberId: loan.member_id,
+        loanId: loan.id,
+        title: 'Guarantor response',
+        message: decision === 'approve'
+          ? 'Your guarantor approved the loan; it is awaiting recommendation.'
+          : 'Your guarantor declined the loan request.',
+        type: 'loan_status',
+      });
+      return true;
+    });
+    if (!update()) return res.status(409).json({ error: 'Loan consent has already been recorded' });
+    res.json(db.prepare('SELECT * FROM loans WHERE id = ?').get(loan.id));
   })
 );
 
@@ -855,6 +984,13 @@ router.patch(
         error:
           `Cannot approve loan from '${loan.status}'. ` +
           `Loan must be 'awaiting_committee_approval'.`,
+      });
+    }
+
+    if (loan.collateral_type === 'property' &&
+        (!loan.collateral_document_ref || !loan.collateral_certifying_authority)) {
+      return res.status(409).json({
+        error: 'Property collateral must include a document reference and certifying authority before committee approval',
       });
     }
 
