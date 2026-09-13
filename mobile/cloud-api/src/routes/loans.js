@@ -12,6 +12,19 @@ const INTEREST_RATE_BY_TERM = { 1: 8, 2: 8, 3: 10, 4: 11, 5: 13 };
 const SHARE_PRICE = 3000;
 const MINIMUM_SHARES_FOR_LOAN = 3;
 
+function getFiscalYearRange(dateString) {
+  const [year, month] = dateString.split('-').map(Number);
+  return month >= 7
+    ? { start: `${year}-07-01`, end: `${year + 1}-07-01` }
+    : { start: `${year - 1}-07-01`, end: `${year}-07-01` };
+}
+
+function sixMonthsBefore(dateString) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() - 6);
+  return date.toISOString().slice(0, 10);
+}
+
 function parseMoney(value, name) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return { error: `${name} must be a positive number` };
@@ -63,12 +76,14 @@ router.post(
       principal_amount,
       term_years,
       collateral_type,
+      collateral_document_ref,
+      collateral_certifying_authority,
     } = req.body ?? {};
     const member_id = req.member.id;
 
-    if (!type || principal_amount === undefined || !term_years || !collateral_type) {
+    if (!type || principal_amount === undefined || !term_years) {
       return res.status(400).json({
-        error: 'type, principal_amount, term_years, and collateral_type are required',
+        error: 'type, principal_amount, and term_years are required',
       });
     }
     if (!VALID_LOAN_TYPES.includes(type)) {
@@ -82,8 +97,11 @@ router.post(
     if (!VALID_TERMS.includes(term_years)) {
       return res.status(400).json({ error: `term_years must be one of: ${VALID_TERMS.join(', ')}` });
     }
-    if (!VALID_COLLATERAL_TYPES.includes(collateral_type)) {
+    if (type === 'regular' && !VALID_COLLATERAL_TYPES.includes(collateral_type)) {
       return res.status(400).json({ error: `collateral_type must be one of: ${VALID_COLLATERAL_TYPES.join(', ')}` });
+    }
+    if (type === 'self_secured' && collateral_type != null) {
+      return res.status(400).json({ error: 'self_secured loans cannot specify collateral_type' });
     }
     if (collateral_type === 'guarantor' && !guarantor_member_id) {
       return res.status(400).json({ error: 'guarantor_member_id is required when collateral_type is guarantor' });
@@ -93,12 +111,16 @@ router.post(
     }
 
     const { rows: memberRows } = await pool.query(
-      'SELECT id, status FROM members WHERE id = $1',
+      'SELECT id, status, date_joined FROM members WHERE id = $1',
       [member_id]
     );
     const member = memberRows[0];
     if (!member || member.status !== 'active') {
       return res.status(400).json({ error: 'Loans can only be created for active members' });
+    }
+    const applicationDate = new Date().toISOString().slice(0, 10);
+    if (!member.date_joined || member.date_joined > sixMonthsBefore(applicationDate)) {
+      return res.status(409).json({ error: 'Member must have been active for at least six months before applying for a loan' });
     }
 
     const { rows: shareRows } = await pool.query(
@@ -147,7 +169,7 @@ router.post(
       }
 
       const { rows: guaranteedLoans } = await pool.query(
-        "SELECT id FROM loans WHERE guarantor_member_id = $1 AND status = 'active'",
+        "SELECT id FROM loans WHERE guarantor_member_id = $1 AND status IN ('awaiting_guarantor', 'awaiting_recommendation', 'awaiting_committee_approval', 'approved', 'active')",
         [guarantor_member_id]
       );
       if (guaranteedLoans[0]) {
@@ -163,6 +185,16 @@ router.post(
       return res.status(409).json({ error: 'Member already has an active loan' });
     }
 
+    if (type === 'self_secured') {
+      const { rows: balanceRows } = await pool.query(
+        `SELECT COALESCE(SUM(amount) FILTER (WHERE type IN ('savings_deposit', 'opening_savings_balance')), 0) AS savings,
+                COALESCE(SUM(amount) FILTER (WHERE type IN ('share_purchase', 'opening_share_balance')), 0) AS shares
+         FROM transactions WHERE member_id = $1`, [member_id]
+      );
+      const available = Number(balanceRows[0].savings) + Number(balanceRows[0].shares);
+      if (principal > available) return res.status(409).json({ error: 'Self-secured loan cannot exceed the member savings plus shares balance' });
+    }
+
     const months = term_years * 12;
     const interest_rate = INTEREST_RATE_BY_TERM[term_years];
     const monthly_installment = Math.round((principal / months) * 100) / 100;
@@ -173,8 +205,8 @@ router.post(
       `INSERT INTO loans
         (member_id, guarantor_member_id, type, principal_amount, term_years,
          interest_rate, monthly_installment, monthly_interest_amount, insurance_amount,
-         collateral_type, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending')
+         collateral_type, collateral_document_ref, collateral_certifying_authority, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         member_id,
@@ -186,12 +218,40 @@ router.post(
         monthly_installment,
         monthly_interest_amount,
         insurance_amount,
-        collateral_type,
+        collateral_type ?? null,
+        collateral_document_ref ?? null,
+        collateral_certifying_authority ?? null,
+        collateral_type === 'guarantor' ? 'awaiting_guarantor' : 'awaiting_recommendation',
       ]
     );
 
-    res.status(201).json(rows[0]);
+    if (collateral_type === 'guarantor') {
+      await pool.query(
+        `INSERT INTO notifications (id, member_id, loan_id, title, message, type, is_read)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, false)`,
+        [guarantor_member_id, rows[0].id, 'Guarantor consent required', 'Please review and respond to this guarantor request.', 'guarantor_request']
+      );
+    }
+    res.status(201).json({ data: rows[0], warnings: [] });
   })
 );
+
+router.patch('/:id/guarantor-response', requireMemberAuth, asyncHandler(async (req, res) => {
+  const { decision } = req.body ?? {};
+  if (!['approve', 'decline'].includes(decision)) return res.status(400).json({ error: 'decision must be either approve or decline' });
+  const nextStatus = decision === 'approve' ? 'awaiting_recommendation' : 'guarantor_declined';
+  const { rows } = await pool.query(
+    `UPDATE loans SET status = $1, guarantor_responded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2 AND guarantor_member_id = $3 AND status = 'awaiting_guarantor' RETURNING *`,
+    [nextStatus, req.params.id, req.member.id]
+  );
+  if (!rows[0]) return res.status(409).json({ error: 'Loan is not awaiting your guarantor consent' });
+  await pool.query(
+    `INSERT INTO notifications (id, member_id, loan_id, title, message, type, is_read)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, 'loan_status', false)`,
+    [rows[0].member_id, rows[0].id, 'Guarantor response', decision === 'approve' ? 'Your guarantor approved the loan.' : 'Your guarantor declined the loan.']
+  );
+  res.json(rows[0]);
+}));
 
 export default router;
