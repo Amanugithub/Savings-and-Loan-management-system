@@ -4,6 +4,8 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
+const SelectItemsContext = React.createContext([])
+
 function textFromChildren(children) {
   return React.Children.toArray(children)
     .map((child) => {
@@ -33,7 +35,11 @@ function Select({ children, items, ...props }) {
   // `items` map. Supplying it here keeps every SelectValue in the application
   // consistent, including selects whose options contain formatted children.
   const resolvedItems = items ?? collectItems(children)
-  return <SelectPrimitive.Root items={resolvedItems} {...props}>{children}</SelectPrimitive.Root>
+  return (
+    <SelectPrimitive.Root items={resolvedItems} {...props}>
+      <SelectItemsContext.Provider value={resolvedItems}>{children}</SelectItemsContext.Provider>
+    </SelectPrimitive.Root>
+  )
 }
 
 function SelectGroup({
@@ -50,13 +56,24 @@ function SelectGroup({
 
 function SelectValue({
   className,
+  children,
+  placeholder,
   ...props
 }) {
+  const items = React.useContext(SelectItemsContext)
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
-      {...props} />
+      placeholder={placeholder}
+      {...props}>
+      {(value) => {
+        if (children != null) return typeof children === "function" ? children(value) : children
+        if (value == null) return placeholder
+        return items.find((item) => Object.is(item.value, value))?.label ?? String(value)
+      }}
+    </SelectPrimitive.Value>
   );
 }
 
