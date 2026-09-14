@@ -1502,6 +1502,7 @@ router.post(
       allocations: result.allocations,
       installments: result.installments,
       outstanding_balance: result.outstanding_balance.total,
+      loan_status: result.loan_status,
     });
   })
 );
