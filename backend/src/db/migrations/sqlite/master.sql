@@ -360,6 +360,7 @@ CREATE TABLE dividend_history (
     share_dividend NUMERIC NOT NULL DEFAULT 0,
     date_calculated TEXT NOT NULL DEFAULT (date('now')),
     synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT,
     UNIQUE (member_id, fiscal_year)
 );
@@ -377,6 +378,7 @@ CREATE TABLE member_exits (
     government_withholding NUMERIC NOT NULL,
     net_amount_paid NUMERIC NOT NULL,
     synced_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT
 );
 
