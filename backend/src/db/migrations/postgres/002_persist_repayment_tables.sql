@@ -132,6 +132,8 @@ CREATE TABLE loan_payments (
     recorded_by UUID NOT NULL
         REFERENCES administrators(id),
 
+    idempotency_key TEXT,
+
     notes VARCHAR(255),
 
     synced_at TIMESTAMPTZ,
@@ -153,6 +155,10 @@ CREATE INDEX idx_loan_payments_recorded_by
 CREATE INDEX idx_loan_payments_unsynced
     ON loan_payments (loan_id)
     WHERE synced_at IS NULL;
+
+CREATE UNIQUE INDEX uq_loan_payments_idempotency
+    ON loan_payments (loan_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 
 
 -- ============================================================
