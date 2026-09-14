@@ -87,10 +87,11 @@ router.get(
     const loan = rows[0];
     if (!loan) return res.status(404).json({ error: 'Loan not found' });
 
-    const [{ rows: schedule }, { rows: penalties }, { rows: payments }] = await Promise.all([
+    const [{ rows: schedule }, { rows: penalties }, { rows: payments }, { rows: collectionExpenses }] = await Promise.all([
       pool.query('SELECT * FROM loan_installments WHERE loan_id = $1 ORDER BY installment_number ASC', [loan.id]),
       pool.query('SELECT * FROM loan_penalties WHERE loan_id = $1 ORDER BY penalty_period ASC', [loan.id]),
       pool.query('SELECT * FROM loan_payments WHERE loan_id = $1 ORDER BY payment_date DESC, created_at DESC', [loan.id]),
+      pool.query('SELECT * FROM expenses WHERE loan_id = $1 ORDER BY date DESC, created_at DESC', [loan.id]),
     ]);
 
     const paymentIds = payments.map((payment) => payment.id);
@@ -129,6 +130,13 @@ router.get(
         (Number(installment.insurance_due) - Number(installment.insurance_paid)),
       0
     );
+    const allocatedCollectionExpenses = allocations
+      .filter((allocation) => allocation.bucket === 'collection_expense')
+      .reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+    const collectionExpenseBalance = Math.max(
+      0,
+      collectionExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0) - allocatedCollectionExpenses
+    );
 
     res.json({
       ...loan,
@@ -137,7 +145,8 @@ router.get(
       payments: paymentHistory,
       total_penalties: round2(totalPenalties),
       outstanding_penalty_balance: round2(outstandingPenaltyBalance),
-      outstanding_balance: round2(outstandingScheduleBalance + outstandingPenaltyBalance),
+      collection_expenses: collectionExpenses,
+      outstanding_balance: round2(outstandingScheduleBalance + outstandingPenaltyBalance + collectionExpenseBalance),
     });
   })
 );
