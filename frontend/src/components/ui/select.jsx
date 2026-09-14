@@ -1,46 +1,9 @@
-import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const SelectItemsContext = React.createContext([])
-
-function textFromChildren(children) {
-  return React.Children.toArray(children)
-    .map((child) => {
-      if (typeof child === "string" || typeof child === "number") return String(child)
-      if (React.isValidElement(child)) return textFromChildren(child.props.children)
-      return ""
-    })
-    .join("")
-    .trim()
-}
-
-function collectItems(children) {
-  const items = []
-  React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return
-    if (child.type === SelectItem && child.props.value != null) {
-      items.push({ value: child.props.value, label: textFromChildren(child.props.children) })
-      return
-    }
-    if (child.props.children) items.push(...collectItems(child.props.children))
-  })
-  return items
-}
-
-function Select({ children, items, ...props }) {
-  // Base UI's Select.Value resolves human-readable labels from the root
-  // `items` map. Supplying it here keeps every SelectValue in the application
-  // consistent, including selects whose options contain formatted children.
-  const resolvedItems = items ?? collectItems(children)
-  return (
-    <SelectPrimitive.Root items={resolvedItems} {...props}>
-      <SelectItemsContext.Provider value={resolvedItems}>{children}</SelectItemsContext.Provider>
-    </SelectPrimitive.Root>
-  )
-}
+const Select = SelectPrimitive.Root
 
 function SelectGroup({
   className,
@@ -56,24 +19,13 @@ function SelectGroup({
 
 function SelectValue({
   className,
-  children,
-  placeholder,
   ...props
 }) {
-  const items = React.useContext(SelectItemsContext)
-
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
-      placeholder={placeholder}
-      {...props}>
-      {(value) => {
-        if (children != null) return typeof children === "function" ? children(value) : children
-        if (value == null) return placeholder
-        return items.find((item) => Object.is(item.value, value))?.label ?? String(value)
-      }}
-    </SelectPrimitive.Value>
+      {...props} />
   );
 }
 
@@ -155,9 +107,6 @@ function SelectItem({
   ...props
 }) {
   return (
-    // Base UI uses the item's label to resolve the text shown by
-    // Select.Value. Supplying it keeps controlled selects from falling back
-    // to the placeholder after a value is selected.
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
