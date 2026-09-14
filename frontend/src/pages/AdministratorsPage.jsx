@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { AlertDialog } from "@/components/ui/alert-dialog"
 import {
   Table,
   TableBody,
@@ -26,11 +27,16 @@ function AdministratorsPage() {
   const { data: administrators = [], isLoading, error } = useAdministrators()
   const createAdministrator = useCreateAdministrator()
   const [form, setForm] = useState(initialForm)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const canManage = canManageAdministrators(currentRole)
 
   const updateField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
   const submit = (event) => {
     event.preventDefault()
+    setConfirmOpen(true)
+  }
+  const confirmCreate = () => {
+    setConfirmOpen(false)
     createAdministrator.mutate(form, { onSuccess: () => setForm(initialForm) })
   }
 
@@ -107,6 +113,15 @@ function AdministratorsPage() {
           </Card>
         )}
       </section>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Create this administrator?"
+        description={`This will create an active ${ROLE_LABELS[form.role] || "administrator"} account for ${form.name || "this person"}.`}
+        confirmLabel="Create administrator"
+        onConfirm={confirmCreate}
+        disabled={createAdministrator.isPending}
+      />
     </main>
   )
 }
