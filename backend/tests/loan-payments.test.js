@@ -128,6 +128,23 @@ describe('payment waterfall', () => {
     assert.ok(res.body.installments.every((i) => i.status === 'paid'));
   });
 
+  test('paying the exact full remaining balance closes the loan', async () => {
+    const { loanId } = await activeLoan({ principal: 12000, termYears: 1 });
+    const quote = await ctx.request('GET', `/api/loans/${loanId}`, { token: tokens.general_manager });
+    const totalDue = quote.body.schedule.reduce(
+      (sum, installment) => sum + installment.principal_due + installment.interest_due + installment.insurance_due,
+      0
+    );
+
+    const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
+      token: tokens.cashier,
+      body: { amount: totalDue },
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.loan_status, 'closed');
+    assert.equal(ctx.db.prepare('SELECT status FROM loans WHERE id = ?').get(loanId).status, 'closed');
+  });
+
   test('a payment is atomic: a rejected payment cannot partially update installments either', async () => {
     const { loanId } = await activeLoan();
     const before = ctx.db
