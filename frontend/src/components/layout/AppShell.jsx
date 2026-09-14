@@ -42,6 +42,7 @@ import { useTheme } from "@/context/ThemeContext"
 import { useAuth } from "@/context/AuthContext"
 import { useLanguage } from "@/context/LanguageContext"
 import { LANGUAGES } from "@/lib/language"
+import { ROLE_LABELS } from "@/lib/loan-workflow"
 
 const navigationGroups = [
   {
@@ -174,7 +175,7 @@ function AppShell() {
                 </Avatar>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{admin?.name || "Admin"}</p>
-                  <p className="truncate text-xs text-muted-foreground">Administrator account</p>
+                  <p className="truncate text-xs text-muted-foreground">{ROLE_LABELS[admin?.role] || "Administrator account"}</p>
                 </div>
               </div>
               <div className="grid gap-2">
