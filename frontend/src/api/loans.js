@@ -41,6 +41,10 @@ export function disburseLoan({ id, disbursement_date }) {
 }
 
 // Returns { payment, allocations, installments, outstanding_balance }
-export function recordLoanPayment({ id, amount, date, notes }) {
-  return apiRequest(`/loans/${id}/payments`, { method: "POST", body: JSON.stringify({ amount, date, notes }) })
+export function recordLoanPayment({ id, amount, date, notes, idempotencyKey }) {
+  return apiRequest(`/loans/${id}/payments`, {
+    method: "POST",
+    headers: { "Idempotency-Key": idempotencyKey },
+    body: JSON.stringify({ amount, date, notes }),
+  })
 }

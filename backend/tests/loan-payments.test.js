@@ -1,5 +1,6 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { startTestServer } from './helpers/testServer.js';
 
 let ctx;
@@ -23,6 +24,7 @@ after(async () => ctx.close());
 // penalty silently joins the interest_penalty bucket — tests that want
 // penalty interaction pass an explicit, backdated disbursementDate.
 const TODAY = new Date().toISOString().slice(0, 10);
+const paymentBody = (body) => ({ ...body, idempotency_key: randomUUID() });
 
 async function activeLoan({ principal = 24000, termYears = 1, disbursementDate = TODAY } = {}) {
   const memberId = ctx.seedMember({ dateJoined: '2020-01-01' });
@@ -52,7 +54,7 @@ describe('payment waterfall', () => {
 
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: 150 },
+      body: paymentBody({ amount: 150 }),
     });
     assert.equal(res.status, 201);
     assert.equal(res.body.allocations[0].bucket, 'collection_expense');
@@ -66,7 +68,7 @@ describe('payment waterfall', () => {
     // Installment 1 on a 24,000 / 1yr self-secured loan: 160 interest + 20 insurance (2000 principal).
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: 180 },
+      body: paymentBody({ amount: 180 }),
     });
     assert.equal(res.status, 201);
 
@@ -82,7 +84,7 @@ describe('payment waterfall', () => {
     // remaining 20 ETB is the only amount left for principal.
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: 2180 },
+      body: paymentBody({ amount: 2180 }),
     });
     assert.equal(res.status, 201);
 
@@ -98,7 +100,7 @@ describe('payment waterfall', () => {
 
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: 999999 },
+      body: paymentBody({ amount: 999999 }),
     });
     assert.equal(res.status, 409);
     assert.ok(typeof res.body.outstanding_balance === 'number');
@@ -111,6 +113,24 @@ describe('payment waterfall', () => {
     assert.equal(allocationCount, 0);
   });
 
+  test('repeating a payment with the same idempotency key returns one receipt', async () => {
+    const { loanId } = await activeLoan();
+    const key = randomUUID();
+    const body = { amount: 180, idempotency_key: key };
+    const first = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
+      token: tokens.cashier,
+      body,
+    });
+    const second = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
+      token: tokens.cashier,
+      body,
+    });
+    assert.equal(first.status, 201);
+    assert.equal(second.status, 200);
+    assert.equal(second.body.payment.id, first.body.payment.id);
+    assert.equal(ctx.db.prepare('SELECT COUNT(*) AS c FROM loan_payments WHERE loan_id = ?').get(loanId).c, 1);
+  });
+
   test('paying the exact full remaining balance closes out every installment and zeroes the outstanding balance', async () => {
     const { loanId } = await activeLoan({ principal: 12000, termYears: 1 });
     const quote = await ctx.request('GET', `/api/loans/${loanId}`, { token: tokens.general_manager });
@@ -121,7 +141,7 @@ describe('payment waterfall', () => {
 
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: totalDue },
+      body: paymentBody({ amount: totalDue }),
     });
     assert.equal(res.status, 201);
     assert.equal(res.body.outstanding_balance, 0);
@@ -138,7 +158,7 @@ describe('payment waterfall', () => {
 
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: totalDue },
+      body: paymentBody({ amount: totalDue }),
     });
     assert.equal(res.status, 201);
     assert.equal(res.body.loan_status, 'closed');
@@ -153,7 +173,7 @@ describe('payment waterfall', () => {
 
     await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: 999999 },
+      body: paymentBody({ amount: 999999 }),
     });
 
     const after = ctx.db
@@ -173,7 +193,7 @@ describe('payment waterfall', () => {
 
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: 1000 },
+      body: paymentBody({ amount: 1000 }),
     });
     assert.equal(res.status, 400);
   });
@@ -185,7 +205,7 @@ describe('payment waterfall', () => {
 
     const payoff = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
-      body: { amount: withPenalty.body.schedule.reduce((s, i) => s + i.principal_due + i.interest_due + i.insurance_due, 0) + withPenalty.body.outstanding_penalty_balance },
+      body: paymentBody({ amount: withPenalty.body.schedule.reduce((s, i) => s + i.principal_due + i.interest_due + i.insurance_due, 0) + withPenalty.body.outstanding_penalty_balance }),
     });
     assert.equal(payoff.status, 201);
 

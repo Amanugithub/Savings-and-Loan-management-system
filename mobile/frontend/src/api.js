@@ -1,17 +1,4 @@
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4001';
-async function request(path, token, init) {
-    const response = await fetch(`${API_URL}${path}`, {
-        ...init,
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init?.headers },
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        const error = new Error(body.error ?? 'Something went wrong. Please try again.');
-        error.status = response.status;
-        throw error;
-    }
-    return body;
-}
+export { API_URL, request } from './api-request.mjs';
 export const api = {
     login: (phone_number, password) => request('/api/auth/login', undefined, { method: 'POST', body: JSON.stringify({ phone_number, password }) }),
     summary: (token) => request('/api/members/me/summary', token),

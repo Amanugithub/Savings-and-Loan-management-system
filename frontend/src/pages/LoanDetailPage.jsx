@@ -127,16 +127,18 @@ function RecordPaymentCard({ loanId }) {
   const [date, setDate] = useState(todayGregorianIso())
   const [notes, setNotes] = useState("")
   const [lastResult, setLastResult] = useState(null)
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
 
   const submit = (event) => {
     event.preventDefault()
     mutation.mutate(
-      { id: loanId, amount: Number(amount), date, notes: notes || undefined },
+      { id: loanId, amount: Number(amount), date, notes: notes || undefined, idempotencyKey },
       {
         onSuccess: (result) => {
           setLastResult(result)
           setAmount("")
           setNotes("")
+          setIdempotencyKey(crypto.randomUUID())
         },
       }
     )
