@@ -264,6 +264,7 @@ CREATE TABLE loan_payments (
     amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
     payment_date DATE NOT NULL,
     recorded_by UUID NOT NULL REFERENCES administrators(id),
+    idempotency_key TEXT,
     notes VARCHAR(255),
 
     synced_at TIMESTAMPTZ,
@@ -280,6 +281,10 @@ CREATE INDEX idx_loan_payments_member
 CREATE INDEX idx_loan_payments_unsynced
     ON loan_payments (synced_at)
     WHERE synced_at IS NULL;
+
+CREATE UNIQUE INDEX uq_loan_payments_idempotency
+    ON loan_payments (loan_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 
 -- ============================================================
 -- LOAN PAYMENT ALLOCATIONS
