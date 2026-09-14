@@ -4,6 +4,8 @@ import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole, INTAKE_LEVEL } from '../middleware/roles.js';
+import { accrueLoanPenalties, getLoanPenaltySummary } from '../services/loanPenalties.js';
+import { recordLoanPayment } from '../services/loanPayments.js';
 
 const router = Router();
 
@@ -355,9 +357,13 @@ router.get(
 
     query += ' ORDER BY created_at DESC';
 
-    res.json(
-      db.prepare(query).all(...params)
-    );
+    const loans = db.prepare(query).all(...params);
+    const loansWithPenalties = loans.map((loan) => {
+      accrueLoanPenalties(loan);
+      return { ...loan, total_penalties: getLoanPenaltySummary(loan.id).total_penalties };
+    });
+
+    res.json(loansWithPenalties);
   })
 );
 
@@ -380,7 +386,13 @@ router.get(
       });
     }
 
-    res.json(loan);
+    accrueLoanPenalties(loan);
+    const schedule = db
+      .prepare('SELECT * FROM loan_installments WHERE loan_id = ? ORDER BY installment_number ASC')
+      .all(loan.id);
+    const { penalties, total_penalties, outstanding_penalty_balance } = getLoanPenaltySummary(loan.id);
+
+    res.json({ ...loan, schedule, penalties, total_penalties, outstanding_penalty_balance });
   })
 );
 
@@ -1417,6 +1429,79 @@ router.patch(
     res.json({
       loan: updatedLoan,
       installments,
+    });
+  })
+);
+
+/**
+ * POST /api/loans/:id/payments
+ *
+ * Cashier only.
+ *
+ * Records a receipt-based payment against an active loan and allocates it
+ * through the Article 16 waterfall: collection expenses, then interest +
+ * insurance + penalties (oldest period first), then principal. Penalty
+ * accrual (#48) runs first so the amount being collected reflects the
+ * loan's current standing. Overpayment is rejected outright — this release
+ * does not create unapplied credit.
+ */
+router.post(
+  '/:id/payments',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const administrator = requireLoanRole(req, res, ['cashier']);
+    if (!administrator) return;
+
+    const loan = db.prepare('SELECT * FROM loans WHERE id = ?').get(req.params.id);
+    if (!loan) {
+      return res.status(404).json({ error: 'Loan not found' });
+    }
+    if (loan.status !== 'active') {
+      return res.status(400).json({
+        error: `Cannot record a payment for a loan with status '${loan.status}'. Loan must be 'active'.`,
+      });
+    }
+
+    const { amount, date, notes } = req.body ?? {};
+
+    const amountResult = parseMoney(amount, 'amount');
+    if (amountResult.error) {
+      return res.status(400).json({ error: amountResult.error });
+    }
+
+    const paymentDate = (typeof date === 'string' && date.trim()) ? date.trim() : new Date().toISOString().slice(0, 10);
+    if (date !== undefined && typeof date !== 'string') {
+      return res.status(400).json({ error: 'date must be a string in YYYY-MM-DD format' });
+    }
+    if (!isValidISODate(paymentDate)) {
+      return res.status(400).json({ error: 'date must be a valid date in YYYY-MM-DD format' });
+    }
+
+    if (notes !== undefined && notes !== null) {
+      if (typeof notes !== 'string' || notes.length > 255) {
+        return res.status(400).json({ error: 'notes must be a string of at most 255 characters' });
+      }
+    }
+
+    const result = recordLoanPayment(loan, {
+      amount: amountResult.value,
+      paymentDate,
+      notes,
+      recordedBy: administrator.id,
+    });
+
+    if (result.overpaid) {
+      return res.status(409).json({
+        error: 'Payment exceeds the loan\'s outstanding balance',
+        outstanding_balance: result.outstanding.total,
+      });
+    }
+
+    res.status(201).json({
+      payment: result.payment,
+      allocations: result.allocations,
+      installments: result.installments,
+      outstanding_balance: result.outstanding_balance.total,
     });
   })
 );

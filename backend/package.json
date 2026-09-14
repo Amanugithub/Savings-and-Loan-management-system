@@ -10,7 +10,8 @@
     "migrate:local": "node src/db/migrate-local.js",
     "migrate:remote": "node src/db/migrate-remote.js",
     "seed:local": "node src/db/seed.js",
-    "seed:admin": "node src/db/seed-admin.js"
+    "seed:admin": "node src/db/seed-admin.js",
+    "test": "node --test"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

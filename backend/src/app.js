@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 
 import membersRouter from './routes/members.js';
 import administratorsRouter from './routes/administrators.js';
@@ -40,7 +41,14 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+export default app;
+
+// Only start listening when this file is run directly (`node src/app.js` /
+// `npm start`), not when it's imported — the test suite imports `app` and
+// controls its own `.listen()` on an ephemeral port instead.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
