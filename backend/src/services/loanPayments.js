@@ -180,6 +180,17 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
       updatedInstallments.push({ ...patch, status });
     }
 
+    const outstandingBalance = getOutstandingBalance(loan);
+    let loanStatus = loan.status;
+    if (outstandingBalance.total <= EPSILON) {
+      const closed = db.prepare(
+        `UPDATE loans
+         SET status = 'closed', updated_at = datetime('now'), synced_at = NULL
+         WHERE id = ? AND status = 'active'`
+      ).run(loan.id);
+      if (closed.changes === 1) loanStatus = 'closed';
+    }
+
     const payment = db.prepare('SELECT * FROM loan_payments WHERE id = ?').get(paymentId);
 
     return {
@@ -187,7 +198,8 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
       payment,
       allocations,
       installments: updatedInstallments,
-      outstanding_balance: getOutstandingBalance(loan),
+      outstanding_balance: outstandingBalance,
+      loan_status: loanStatus,
     };
   })();
 }
