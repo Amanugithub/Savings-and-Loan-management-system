@@ -1456,13 +1456,22 @@ router.post(
     if (!loan) {
       return res.status(404).json({ error: 'Loan not found' });
     }
-    if (loan.status !== 'active') {
+    const { amount, date, notes, idempotency_key: bodyIdempotencyKey } = req.body ?? {};
+    const idempotencyKey = req.get('Idempotency-Key') || bodyIdempotencyKey;
+    if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '' || idempotencyKey.length > 128) {
+      return res.status(400).json({
+        error: 'Idempotency-Key header or idempotency_key body field is required and must be at most 128 characters',
+      });
+    }
+
+    const existingPayment = db.prepare(
+      'SELECT id FROM loan_payments WHERE loan_id = ? AND idempotency_key = ?'
+    ).get(loan.id, idempotencyKey);
+    if (!existingPayment && loan.status !== 'active') {
       return res.status(400).json({
         error: `Cannot record a payment for a loan with status '${loan.status}'. Loan must be 'active'.`,
       });
     }
-
-    const { amount, date, notes } = req.body ?? {};
 
     const amountResult = parseMoney(amount, 'amount');
     if (amountResult.error) {
@@ -1488,6 +1497,7 @@ router.post(
       paymentDate,
       notes,
       recordedBy: administrator.id,
+      idempotencyKey,
     });
 
     if (result.overpaid) {
@@ -1497,7 +1507,7 @@ router.post(
       });
     }
 
-    res.status(201).json({
+    res.status(result.idempotent ? 200 : 201).json({
       payment: result.payment,
       allocations: result.allocations,
       installments: result.installments,
