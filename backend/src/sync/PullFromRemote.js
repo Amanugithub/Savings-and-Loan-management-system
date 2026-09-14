@@ -3,7 +3,7 @@ import pool from "../config/postgres.js";
 
 // Pull parents before children so remote UUID foreign keys can be translated
 // to the local UUIDs recorded in sync_id_map.
-const PULL_TABLES = [
+export const PULL_TABLES = [
   {
     name: "administrators",
     columns: [
@@ -113,6 +113,7 @@ const PULL_TABLES = [
       "amount",
       "payment_date",
       "recorded_by",
+      "idempotency_key",
       "notes",
       "created_at",
       "updated_at",
