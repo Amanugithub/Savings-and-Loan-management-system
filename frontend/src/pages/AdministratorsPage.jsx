@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -13,15 +14,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { useAuth } from "@/context/AuthContext"
 import { useCreateAdministrator, useAdministrators } from "@/hooks/use-administrators"
 import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
+import { canManageAdministrators, ROLE_LABELS, ROLES } from "@/lib/loan-workflow"
 
-const initialForm = { name: "", username: "", password: "" }
+const initialForm = { name: "", username: "", password: "", role: "" }
 
 function AdministratorsPage() {
+  const { role: currentRole } = useAuth()
   const { data: administrators = [], isLoading, error } = useAdministrators()
   const createAdministrator = useCreateAdministrator()
   const [form, setForm] = useState(initialForm)
+  const canManage = canManageAdministrators(currentRole)
 
   const updateField = (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
   const submit = (event) => {
@@ -37,7 +42,7 @@ function AdministratorsPage() {
         <p className="mt-2 max-w-2xl text-muted-foreground">Manage the people who can access and operate the cooperative management portal.</p>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
+      <section className={canManage ? "grid gap-6 xl:grid-cols-[1.5fr_1fr]" : "grid gap-6"}>
         <Card>
           <CardHeader className="flex flex-row items-start justify-between gap-4 border-b">
             <div>
@@ -56,6 +61,7 @@ function AdministratorsPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Username</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created</TableHead>
                   </TableRow>
@@ -65,6 +71,7 @@ function AdministratorsPage() {
                     <TableRow key={administrator.id}>
                       <TableCell className="font-medium"><span className="flex items-center gap-2"><UserRound className="text-muted-foreground" />{administrator.name}</span></TableCell>
                       <TableCell>{administrator.username}</TableCell>
+                      <TableCell><Badge variant="outline">{ROLE_LABELS[administrator.role] || administrator.role}</Badge></TableCell>
                       <TableCell><Badge variant={administrator.status === "active" ? "default" : "secondary"}>{administrator.status}</Badge></TableCell>
                       <TableCell className="font-amharic text-muted-foreground">{<span className="font-amharic">{formatEthiopianDate(administrator.created_at)}</span>}</TableCell>
                     </TableRow>
@@ -75,22 +82,30 @@ function AdministratorsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Plus /> New administrator</CardTitle>
-            <CardDescription>Create an account for a trusted cooperative operator.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={submit} className="flex flex-col gap-4">
-              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-name">Full name<Input id="admin-name" name="name" value={form.name} onChange={updateField} required /></label>
-              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-username">Username<Input id="admin-username" name="username" value={form.username} onChange={updateField} required /></label>
-              <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-password">Temporary password<Input id="admin-password" name="password" type="password" value={form.password} onChange={updateField} minLength={8} required /></label>
-              {createAdministrator.error && <p className="text-sm text-destructive">{createAdministrator.error.message}</p>}
-              {createAdministrator.isSuccess && <p className="text-sm text-primary">Administrator created successfully.</p>}
-              <Button type="submit" disabled={createAdministrator.isPending}><KeyRound /> {createAdministrator.isPending ? "Creating…" : "Create administrator"}</Button>
-            </form>
-          </CardContent>
-        </Card>
+        {canManage && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Plus /> New administrator</CardTitle>
+              <CardDescription>Create an account for a trusted cooperative operator.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={submit} className="flex flex-col gap-4">
+                <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-name">Full name<Input id="admin-name" name="name" value={form.name} onChange={updateField} required /></label>
+                <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-username">Username<Input id="admin-username" name="username" value={form.username} onChange={updateField} required /></label>
+                <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-role">Role
+                  <Select value={form.role || undefined} onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}>
+                    <SelectTrigger id="admin-role" className="w-full"><SelectValue placeholder="Select a role" /></SelectTrigger>
+                    <SelectContent><SelectGroup>{ROLES.map((role) => <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>)}</SelectGroup></SelectContent>
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-password">Temporary password<Input id="admin-password" name="password" type="password" value={form.password} onChange={updateField} minLength={8} required /></label>
+                {createAdministrator.error && <p role="alert" className="text-sm text-destructive">{createAdministrator.error.message}</p>}
+                {createAdministrator.isSuccess && <p className="text-sm text-primary">Administrator created successfully.</p>}
+                <Button type="submit" disabled={createAdministrator.isPending || !form.role}><KeyRound /> {createAdministrator.isPending ? "Creating…" : "Create administrator"}</Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
       </section>
     </main>
   )

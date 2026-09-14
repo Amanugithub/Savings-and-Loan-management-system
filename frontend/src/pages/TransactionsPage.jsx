@@ -10,14 +10,17 @@ import { Empty, EmptyDescription, EmptyMedia, EmptyTitle } from "@/components/ui
 import { MemberCombobox } from "@/components/ui/member-combobox"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { useAuth } from "@/context/AuthContext"
 import { useMembers } from "@/hooks/use-members"
 import { useTransactions } from "@/hooks/use-transactions"
 import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
+import { canRecordTransaction } from "@/lib/loan-workflow"
 
 const transactionTypes = ["savings_deposit", "share_purchase", "penalty_payment", "registration_fee", "card_fee", "loan_disbursement", "loan_installment", "loan_interest", "loan_insurance", "bank_interest_income"]
 const typeLabels = { savings_deposit: "Savings deposit", share_purchase: "Share purchase", penalty_payment: "Penalty payment", registration_fee: "Registration fee", card_fee: "Card fee", loan_disbursement: "Loan disbursement", loan_installment: "Loan installment", loan_interest: "Loan interest", loan_insurance: "Loan insurance", bank_interest_income: "Bank interest income" }
 
 function TransactionsPage() {
+  const { role } = useAuth()
   const [filters, setFilters] = useState({ type: "", member_id: "", date_from: "", date_to: "", limit: 20, offset: 0 })
   const { data, isLoading, error } = useTransactions(filters)
   const { data: members = [] } = useMembers()
@@ -28,7 +31,7 @@ function TransactionsPage() {
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value, offset: 0 }))
 
   return <main className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-    <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><Badge variant="secondary" className="mb-3">Financial activity</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Transactions</h1><p className="mt-2 text-muted-foreground">Track every savings, share, fee, and loan movement.</p></div><Button render={<Link to="/transactions/new" />}><Plus data-icon="inline-start" /> Record transaction</Button></section>
+    <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><Badge variant="secondary" className="mb-3">Financial activity</Badge><h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground md:text-4xl">Transactions</h1><p className="mt-2 text-muted-foreground">Track every savings, share, fee, and loan movement.</p></div>{canRecordTransaction(role) && <Button render={<Link to="/transactions/new" />}><Plus data-icon="inline-start" /> Record transaction</Button>}</section>
     <Card><CardHeader className="gap-4 border-b"><div><CardTitle>Transaction ledger</CardTitle><CardDescription className="mt-1">Showing {transactions.length} records from the current page.</CardDescription></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       <label className="flex flex-col gap-2 text-sm font-medium lg:col-span-2" htmlFor="transaction-member-filter">Member<MemberCombobox id="transaction-member-filter" members={members} value={filters.member_id} onValueChange={(value) => updateFilter("member_id", value)} /></label>
       <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="transaction-type-filter">Type<Select value={filters.type || "all"} onValueChange={(value) => updateFilter("type", value === "all" ? "" : value)}><SelectTrigger id="transaction-type-filter"><SelectValue placeholder="All types" /></SelectTrigger><SelectContent><SelectGroup><SelectItem value="all">All types</SelectItem>{transactionTypes.map((type) => <SelectItem key={type} value={type}>{typeLabels[type]}</SelectItem>)}</SelectGroup></SelectContent></Select></label>

@@ -23,5 +23,6 @@ export const api = {
     notifications: (token, unread = false) => request(`/api/notifications/me${unread ? '?unread=true' : ''}`, token),
     markRead: (token, id) => request(`/api/notifications/${id}/read`, token, { method: 'PATCH' }),
     applyLoan: (token, payload) => request('/api/loans', token, { method: 'POST', body: JSON.stringify(payload) }),
+    guarantorResponse: (token, id, decision) => request(`/api/loans/${id}/guarantor-response`, token, { method: 'PATCH', body: JSON.stringify({ decision }) }),
     changePassword: (token, current_password, new_password) => request('/api/auth/password', token, { method: 'PATCH', body: JSON.stringify({ current_password, new_password }) }),
 };

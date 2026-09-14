@@ -31,13 +31,20 @@ const CASHIER_TRANSACTION_TYPES = new Set([
   'opening_share_balance',
   'registration_fee',
   'card_fee',
+]);
+
+const ACCOUNTANT_TRANSACTION_TYPES = new Set(['bank_interest_income']);
+
+// These used to be recorded as ad-hoc transactions, but a loan repayment
+// now has to go through the Article 16 waterfall (POST /api/loans/:id/payments)
+// so it gets allocated, penalty accrual runs first, and overpayment is
+// rejected. Historical rows of these types are still readable via GET.
+const LOAN_REPAYMENT_TYPES = new Set([
   'loan_installment',
   'loan_interest',
   'loan_insurance',
   'penalty_payment',
 ]);
-
-const ACCOUNTANT_TRANSACTION_TYPES = new Set(['bank_interest_income']);
 
 function isValidISODate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -117,6 +124,14 @@ router.post(
         .status(400)
         .json({
           error: 'member_exit_payout is created by the member exit process',
+        });
+    }
+
+    if (LOAN_REPAYMENT_TYPES.has(type)) {
+      return res
+        .status(400)
+        .json({
+          error: 'Loan repayments are recorded via POST /api/loans/:id/payments, not this endpoint',
         });
     }
 

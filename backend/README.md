@@ -36,6 +36,32 @@ npm run dev
 
 Server starts on `http://localhost:4000`. Check `GET /health` to confirm it's up.
 
+## Run the tests
+
+```bash
+npm test
+```
+
+Uses Node's built-in test runner (`node --test`) — no extra dependency. Each
+test file builds its own throwaway SQLite database straight from
+`master.sql` (via `LOCAL_DB_PATH`) and boots the real Express app on an
+ephemeral port, so tests never touch your `local.db` and can run
+concurrently. Temporary databases live under `.tmp/` and are deleted after
+each file finishes.
+
+Covers the authorization matrix (JWT roles, 403s), the full nine-status
+loan workflow and guarantor consent, eligibility boundaries, non-blocking
+warnings, penalty accrual (idempotency, compounding, concurrency), the
+payment waterfall (bucket ordering, overpayment rejection, atomicity), and
+SQLite migrations (clean install + re-run safety).
+
+The Postgres schema-compatibility test is opt-in: set `TEST_DATABASE_URL`
+to a scratch Postgres/Supabase instance to run it (it creates and drops its
+own throwaway schema); without it, that one test is skipped rather than
+failed. Never point `TEST_DATABASE_URL` at a database you care about.
+
+CI runs this on every push/PR via `.github/workflows/backend-tests.yml`.
+
 ## Create your first admin + log in
 
 ```bash

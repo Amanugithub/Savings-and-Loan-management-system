@@ -88,12 +88,21 @@ router.post(
   requireAuth,
   requireRole("accountant"),
   asyncHandler(async (req, res) => {
-    const { category, amount, description, date } = req.body;
+    const { category, amount, description, date, loan_id } = req.body;
 
     if (!category || amount === undefined) {
       return res.status(400).json({
         error: "category and amount are required",
       });
+    }
+
+    if (loan_id !== undefined && loan_id !== null) {
+      const loan = db.prepare("SELECT id FROM loans WHERE id = ?").get(loan_id);
+      if (!loan) {
+        return res.status(400).json({
+          error: "loan_id does not reference an existing loan",
+        });
+      }
     }
 
     if (!ALLOWED_EXPENSE_CATEGORIES.includes(category)) {
@@ -143,10 +152,11 @@ router.post(
     amount,
     date,
     recorded_by,
+    loan_id,
     updated_at,
     synced_at
   )
-  VALUES (?, ?, ?, ?, ?, ?, datetime('now'), NULL)
+  VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), NULL)
 `,
     ).run(
       id,
@@ -155,6 +165,7 @@ router.post(
       normalizedAmount,
       expenseDate,
       recordedBy,
+      loan_id ?? null,
     );
 
     const expense = db.prepare("SELECT * FROM expenses WHERE id = ?").get(id);
