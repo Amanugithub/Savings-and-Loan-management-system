@@ -27,7 +27,7 @@ export default function Notifications() {
       <Text style={s.sub}>Updates, reminders and loan decisions</Text>
       {q.isError ? <ErrorState message="We couldn’t load your notifications." retry={() => q.refetch()} /> : q.isLoading ? <><NotificationSkeleton /><NotificationSkeleton /><NotificationSkeleton /></> : q.data?.length ? q.data.map((item) => (
         <Pressable key={item.id} onPress={() => openNotification(item)} style={({ pressed }) => [s.item, !item.is_read && s.unread, pressed && s.pressed]}>
-          <View style={[s.icon, !item.is_read && s.unreadIcon]}><Ionicons name={item.type === 'loan_status' ? 'briefcase-outline' : 'notifications-outline'} size={19} color={themeColors.green} /></View>
+          <View style={[s.icon, !item.is_read && s.unreadIcon]}><Ionicons name={item.type === 'guarantor_request' ? 'shield-checkmark-outline' : item.type === 'loan_status' ? 'briefcase-outline' : 'notifications-outline'} size={19} color={themeColors.green} /></View>
           <View style={{ flex: 1 }}><View style={s.row}><Text style={s.itemTitle}>{item.title}</Text>{!item.is_read && <View style={s.dot} />}</View><Text style={s.message}>{item.message}</Text><Text style={s.date}>{formatEthiopianDateTime(item.created_at, { language })}</Text></View>
           <Ionicons name="chevron-forward" size={17} color={themeColors.subtle} />
         </Pressable>
@@ -37,7 +37,7 @@ export default function Notifications() {
       <Pressable style={s.modalBackdrop} onPress={() => setSelected(null)}>
         <View style={s.modalCard}>
           <View style={s.modalHandle} />
-          <View style={s.modalTop}><View style={s.modalIcon}><Ionicons name={selected?.type === 'loan_status' ? 'briefcase-outline' : 'notifications-outline'} size={21} color={themeColors.green} /></View><Pressable onPress={() => setSelected(null)} hitSlop={10} style={s.closeButton}><Ionicons name="close" size={21} color={themeColors.muted} /></Pressable></View>
+          <View style={s.modalTop}><View style={s.modalIcon}><Ionicons name={selected?.type === 'guarantor_request' ? 'shield-checkmark-outline' : selected?.type === 'loan_status' ? 'briefcase-outline' : 'notifications-outline'} size={21} color={themeColors.green} /></View><Pressable onPress={() => setSelected(null)} hitSlop={10} style={s.closeButton}><Ionicons name="close" size={21} color={themeColors.muted} /></Pressable></View>
           <Text style={s.modalTitle}>{selected?.title}</Text>
           <Text style={s.modalDate}>{selected ? formatEthiopianDateTime(selected.created_at, { language }) : ''}</Text>
           <Text style={s.modalMessage}>{selected?.message}</Text>
