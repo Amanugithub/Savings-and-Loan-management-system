@@ -29,8 +29,8 @@ const updateInstallmentStmt = db.prepare(
 );
 
 const insertPaymentStmt = db.prepare(
-  `INSERT INTO loan_payments (id, loan_id, member_id, amount, payment_date, recorded_by, notes, synced_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`
+  `INSERT INTO loan_payments (id, loan_id, member_id, amount, payment_date, recorded_by, idempotency_key, notes, synced_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`
 );
 
 const insertAllocationStmt = db.prepare(
@@ -87,8 +87,28 @@ export function getOutstandingBalance(loan) {
  * unapplied credit, so an overpayment is rejected outright rather than
  * partially applied.
  */
-export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy }) {
+export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy, idempotencyKey }) {
   return db.transaction(() => {
+    const existing = db.prepare(
+      'SELECT * FROM loan_payments WHERE loan_id = ? AND idempotency_key = ?'
+    ).get(loan.id, idempotencyKey);
+    if (existing) {
+      const allocations = db.prepare(
+        'SELECT * FROM loan_payment_allocations WHERE payment_id = ? ORDER BY created_at ASC'
+      ).all(existing.id);
+      const installments = installmentsStmt.all(loan.id);
+      const currentLoan = db.prepare('SELECT status FROM loans WHERE id = ?').get(loan.id);
+      return {
+        overpaid: false,
+        idempotent: true,
+        payment: existing,
+        allocations,
+        installments,
+        outstanding_balance: getOutstandingBalance(loan),
+        loan_status: currentLoan?.status ?? loan.status,
+      };
+    }
+
     accrueLoanPenalties(loan);
 
     const outstanding = getOutstandingBalance(loan);
@@ -97,7 +117,16 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
     }
 
     const paymentId = randomUUID();
-    insertPaymentStmt.run(paymentId, loan.id, loan.member_id, amount, paymentDate, recordedBy, notes ?? null);
+    insertPaymentStmt.run(
+      paymentId,
+      loan.id,
+      loan.member_id,
+      amount,
+      paymentDate,
+      recordedBy,
+      idempotencyKey,
+      notes ?? null
+    );
 
     let remaining = amount;
     const allocations = [];
