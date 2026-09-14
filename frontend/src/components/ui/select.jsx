@@ -1,9 +1,40 @@
+import * as React from "react"
 import { Select as SelectPrimitive } from "@base-ui/react/select"
 
 import { cn } from "@/lib/utils"
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react"
 
-const Select = SelectPrimitive.Root
+function textFromChildren(children) {
+  return React.Children.toArray(children)
+    .map((child) => {
+      if (typeof child === "string" || typeof child === "number") return String(child)
+      if (React.isValidElement(child)) return textFromChildren(child.props.children)
+      return ""
+    })
+    .join("")
+    .trim()
+}
+
+function collectItems(children) {
+  const items = []
+  React.Children.forEach(children, (child) => {
+    if (!React.isValidElement(child)) return
+    if (child.type === SelectItem && child.props.value != null) {
+      items.push({ value: child.props.value, label: textFromChildren(child.props.children) })
+      return
+    }
+    if (child.props.children) items.push(...collectItems(child.props.children))
+  })
+  return items
+}
+
+function Select({ children, items, ...props }) {
+  // Base UI's Select.Value resolves human-readable labels from the root
+  // `items` map. Supplying it here keeps every SelectValue in the application
+  // consistent, including selects whose options contain formatted children.
+  const resolvedItems = items ?? collectItems(children)
+  return <SelectPrimitive.Root items={resolvedItems} {...props}>{children}</SelectPrimitive.Root>
+}
 
 function SelectGroup({
   className,
