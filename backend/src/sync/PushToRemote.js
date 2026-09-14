@@ -5,7 +5,7 @@ import pool from "../config/postgres.js";
 // (a member) via foreign key. If we tried to push loans before their
 // member exists on the remote side, the insert would fail. Parents
 // first, children after.
-const SYNC_TABLES = [
+export const SYNC_TABLES = [
   {
     name: "administrators",
     columns: [
@@ -114,6 +114,7 @@ const SYNC_TABLES = [
       "amount",
       "payment_date",
       "recorded_by",
+      "idempotency_key",
       "notes",
       "created_at",
       "updated_at",
