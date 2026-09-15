@@ -32,14 +32,14 @@ router.post(
     if (!passwordMatches) return invalidCreds();
 
     const token = jwt.sign(
-      { id: admin.id, username: admin.username },
+      { id: admin.id, username: admin.username, role: admin.role },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
     res.json({
       token,
-      admin: { id: admin.id, name: admin.name, username: admin.username },
+      admin: { id: admin.id, name: admin.name, username: admin.username, role: admin.role },
     });
   })
 );

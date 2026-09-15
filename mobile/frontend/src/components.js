@@ -27,7 +27,28 @@ export function Screen({ children, title, subtitle, right, scroll = false }) {
 export function Button({ children, variant = 'primary', style, ...props }) { const { colors: themeColors } = useTheme(); styles = createStyles(themeColors); return <Pressable {...props} style={({ pressed }) => [styles.button, variant === 'secondary' && styles.secondaryButton, pressed && styles.pressed, style]}><AppText style={[styles.buttonText, variant === 'secondary' && styles.secondaryText]}>{children}</AppText></Pressable>; }
 export function IconButton({ name, onPress, badge }) { const { colors: themeColors } = useTheme(); styles = createStyles(themeColors); return <Pressable onPress={onPress} hitSlop={8} style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}><Ionicons name={name} size={21} color={themeColors.ink}/>{badge && <View style={styles.badge}/>}</Pressable>; }
 export function SectionTitle({ children, action, onAction }) { return <View style={styles.sectionTitle}><AppText style={styles.sectionText}>{children}</AppText>{action && <Pressable onPress={onAction}><AppText style={styles.action}>{action}</AppText></Pressable>}</View>; }
-export function StatusPill({ status }) { const { colors: themeColors } = useTheme(); styles = createStyles(themeColors); const map = { active: ['Active', themeColors.mint], pending: ['Pending', themeColors.amberSoft], closed: ['Closed', themeColors.line], rejected: ['Rejected', themeColors.redSoft] }; const [label, background] = map[status] ?? [status, themeColors.line]; return <View style={[styles.pill, { backgroundColor: background }]}><AppText style={styles.pillText}>{label}</AppText></View>; }
+// The nine real loan statuses (backend/src/db/migrations/postgres/master.sql,
+// loans.status CHECK constraint) — previously this only recognized
+// active/pending/closed/rejected, none of which except active/closed/
+// rejected are real values, so every in-progress application rendered as
+// a raw, untranslated status string.
+export function StatusPill({ status }) {
+  const { colors: themeColors } = useTheme();
+  styles = createStyles(themeColors);
+  const map = {
+    awaiting_guarantor: ['Awaiting guarantor', themeColors.amberSoft],
+    guarantor_declined: ['Guarantor declined', themeColors.redSoft],
+    awaiting_recommendation: ['Awaiting recommendation', themeColors.amberSoft],
+    recommendation_declined: ['Declined', themeColors.redSoft],
+    awaiting_committee_approval: ['Awaiting approval', themeColors.amberSoft],
+    rejected: ['Rejected', themeColors.redSoft],
+    approved: ['Approved', themeColors.mintStrong],
+    active: ['Active', themeColors.mint],
+    closed: ['Closed', themeColors.line],
+  };
+  const [label, background] = map[status] ?? [status, themeColors.line];
+  return <View style={[styles.pill, { backgroundColor: background }]}><AppText style={styles.pillText}>{label}</AppText></View>;
+}
 export function ErrorState({ message, retry }) { const { colors: themeColors } = useTheme(); styles = createStyles(themeColors); return <View style={styles.error}><Ionicons name="cloud-offline-outline" size={26} color={themeColors.red}/><AppText style={styles.errorText}>{message}</AppText><Button variant="secondary" onPress={retry}>Try again</Button></View>; }
 export function Skeleton({ width = '100%', height = 18 }) { const { colors: themeColors } = useTheme(); styles = createStyles(themeColors); return <View style={[styles.skeleton, { width, height }]}/>; }
 export function ThemedAlert({ visible, title, message, actions = [{ text: 'OK' }], onClose }) { const { colors: themeColors } = useTheme(); styles = createStyles(themeColors); return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><Pressable style={styles.alertBackdrop} onPress={onClose}><Pressable style={styles.alertCard} onPress={(event) => event.stopPropagation()}><AppText style={styles.alertTitle}>{title}</AppText>{message && <AppText style={styles.alertMessage}>{message}</AppText>}<View style={styles.alertActions}>{actions.map((action) => <Pressable key={action.text} onPress={() => { onClose?.(); action.onPress?.(); }} style={({ pressed }) => [styles.alertAction, pressed && styles.pressed]}><AppText style={[styles.alertActionText, action.variant === 'destructive' && styles.alertDestructive]}>{action.text}</AppText></Pressable>)}</View></Pressable></Pressable></Modal>; }

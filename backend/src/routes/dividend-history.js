@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roles.js';
 
 const router = Router();
 
@@ -143,6 +144,7 @@ router.get(
 // (member_id, fiscal_year) — safe to re-run if figures need correcting).
 router.post(
   '/calculate/:fiscalYear',
+  requireRole('accountant'),
   asyncHandler(async (req, res) => {
     const fiscalYearResult = parseFiscalYear(req.params.fiscalYear);
     if (fiscalYearResult.error) return res.status(400).json({ error: fiscalYearResult.error });

@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import db from '../config/sqlite.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
+import { requireRole } from '../middleware/roles.js';
 
 const router = Router();
 
@@ -117,6 +118,7 @@ router.get(
 // member_id and optionally exit_date.
 router.post(
   '/',
+  requireRole('accountant', 'general_manager'),
   asyncHandler(async (req, res) => {
     const { member_id, exit_date } = req.body;
 

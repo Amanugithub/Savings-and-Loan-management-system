@@ -8,8 +8,13 @@
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
     "migrate:local": "node src/db/migrate-local.js",
+    "migrate:remote": "node src/db/migrate-remote.js",
     "seed:local": "node src/db/seed.js",
-    "seed:admin": "node src/db/seed-admin.js"
+    "seed:admin": "node src/db/seed-admin.js",
+    "test": "node --test",
+    "db:backup": "node src/db/backup-local.js",
+    "db:verify": "node src/db/verify-release.js",
+    "db:compare-schemas": "node src/db/compare-schemas.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

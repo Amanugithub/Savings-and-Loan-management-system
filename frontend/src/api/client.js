@@ -15,6 +15,10 @@ export async function apiRequest(path, options = {}) {
   if (!response.ok) {
     const error = new Error(body?.error || "The request could not be completed")
     error.status = response.status
+    // Some endpoints attach extra context to a failure response (e.g. the
+    // payment endpoint's `outstanding_balance` on a 409) — keep it
+    // reachable without every caller re-parsing the body.
+    Object.assign(error, body)
     throw error
   }
   return body
