@@ -113,6 +113,7 @@ export const SYNC_TABLES = [
       "member_id",
       "amount",
       "payment_date",
+      "payment_method",
       "recorded_by",
       "idempotency_key",
       "notes",

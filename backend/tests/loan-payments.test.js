@@ -107,8 +107,8 @@ describe('payment waterfall', () => {
     });
     assert.equal(shortPayment.status, 200);
     assert.equal(shortPayment.body.next_installment.installment_number, 1);
-    assert.equal(shortPayment.body.next_installment.total_remaining, 740.01);
-    assert.equal(shortPayment.body.shortfall, 0.01);
+    assert.equal(shortPayment.body.next_installment.total_remaining, 740);
+    assert.equal(shortPayment.body.shortfall, 0);
     assert.equal(shortPayment.body.excess_over_installment, 0);
 
     const continuingPayment = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
@@ -116,8 +116,51 @@ describe('payment waterfall', () => {
       body: { amount: 1000 },
     });
     assert.equal(continuingPayment.status, 200);
-    assert.equal(continuingPayment.body.excess_over_installment, 259.99);
+    assert.equal(continuingPayment.body.excess_over_installment, 260);
     assert.ok(continuingPayment.body.allocations.some((allocation) => allocation.installment_number === 2));
+  });
+
+  test('cash rounding can be kept on the current installment and reduces the final scheduled principal', async () => {
+    const { loanId } = await activeLoan({ principal: 24000, termYears: 3 });
+    const quote = await ctx.request('GET', `/api/loans/${loanId}`, { token: tokens.general_manager });
+    assert.equal(quote.body.monthly_installment, 740);
+    assert.equal(Number((quote.body.schedule[0].principal_due + quote.body.schedule[0].interest_due + quote.body.schedule[0].insurance_due).toFixed(2)), 740);
+
+    const preview = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
+      token: tokens.cashier,
+      body: { amount: 745, payment_method: 'cash', allocation_mode: 'cash_rounding_current' },
+    });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.allocation_mode, 'cash_rounding_current');
+    assert.equal(preview.body.excess_over_installment, 5);
+    assert.equal(preview.body.allocations.at(-1).bucket, 'cash_rounding_adjustment');
+    assert.equal(preview.body.allocations.at(-1).amount, 5);
+    assert.ok(preview.body.allocations.every((allocation) => allocation.installment_number === 1));
+
+    const payment = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
+      token: tokens.cashier,
+      body: paymentBody({ amount: 745, payment_method: 'cash', allocation_mode: 'cash_rounding_current' }),
+    });
+    assert.equal(payment.status, 201);
+    assert.equal(payment.body.payment.payment_method, 'cash');
+    assert.equal(payment.body.installments[0].status, 'paid');
+    assert.equal(payment.body.installments.at(-1).principal_due, 661.55);
+    assert.equal(payment.body.installments[1].principal_paid, 0);
+  });
+
+  test('cash rounding is limited to 5 ETB and only applies to cash', async () => {
+    const { loanId } = await activeLoan({ principal: 24000, termYears: 3 });
+    const nonCash = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
+      token: tokens.cashier,
+      body: { amount: 745, payment_method: 'bank_transfer', allocation_mode: 'cash_rounding_current' },
+    });
+    assert.equal(nonCash.status, 400);
+
+    const tooLarge = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
+      token: tokens.cashier,
+      body: { amount: 746, payment_method: 'cash', allocation_mode: 'cash_rounding_current' },
+    });
+    assert.equal(tooLarge.status, 400);
   });
 
   test('payment preview identifies an amount greater than the full loan balance without writing', async () => {

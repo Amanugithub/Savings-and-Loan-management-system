@@ -5,7 +5,12 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole, INTAKE_LEVEL } from '../middleware/roles.js';
 import { accrueLoanPenalties, getLoanPenaltySummary } from '../services/loanPenalties.js';
-import { previewLoanPayment, recordLoanPayment } from '../services/loanPayments.js';
+import {
+  ALLOCATION_MODES,
+  PAYMENT_METHODS,
+  previewLoanPayment,
+  recordLoanPayment,
+} from '../services/loanPayments.js';
 
 const router = Router();
 
@@ -45,6 +50,10 @@ const SHARE_PRICE = 3000;
 const MINIMUM_SHARES_FOR_LOAN = 3;
 const LOAN_AMOUNT_WARNING_LIMIT = 50000;
 const ANNUAL_DISBURSEMENT_WARNING_LIMIT = 2000000;
+
+function roundMoney(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 /**
  * Parse and validate money values.
@@ -246,27 +255,12 @@ function generateInstallmentSchedule(loan, disbursementDate) {
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 'unpaid', NULL)`
   );
 
-  const monthlyPrincipal =
-    Math.round(
-      (loan.principal_amount / months + Number.EPSILON) * 100
-    ) / 100;
-
-  const monthlyInterest =
-    Math.round(
-      (loan.monthly_interest_amount + Number.EPSILON) * 100
-    ) / 100;
-
-  /*
-   * insurance_amount is the total insurance amount for the loan.
-   * Spread it across the installments and adjust the final
-   * installment for rounding.
-   */
-  const monthlyInsurance =
-    Math.round(
-      (loan.insurance_amount / months + Number.EPSILON) * 100
-    ) / 100;
+  const totalInterest = roundMoney(loan.principal_amount * loan.interest_rate / 100);
+  const monthlyPrincipal = roundMoney(loan.principal_amount / months);
+  const monthlyInterest = roundMoney(totalInterest / months);
 
   let principalScheduled = 0;
+  let interestScheduled = 0;
   let insuranceScheduled = 0;
 
   for (let installmentNumber = 1; installmentNumber <= months; installmentNumber += 1) {
@@ -274,18 +268,18 @@ function generateInstallmentSchedule(loan, disbursementDate) {
       installmentNumber === months;
 
     const principalDue = isLastInstallment
-      ? Math.round(
-          (loan.principal_amount - principalScheduled + Number.EPSILON) * 100
-        ) / 100
+      ? roundMoney(loan.principal_amount - principalScheduled)
       : monthlyPrincipal;
 
-    const insuranceDue = isLastInstallment
-      ? Math.round(
-          (loan.insurance_amount - insuranceScheduled + Number.EPSILON) * 100
-        ) / 100
-      : monthlyInsurance;
+    const interestDue = isLastInstallment
+      ? roundMoney(totalInterest - interestScheduled)
+      : monthlyInterest;
 
-    const interestDue = monthlyInterest;
+    // Make every installment equal to the displayed monthly installment to
+    // the cent. The final installment absorbs the accumulated rounding.
+    const insuranceDue = isLastInstallment
+      ? roundMoney(loan.insurance_amount - insuranceScheduled)
+      : roundMoney(roundMoney(loan.principal_amount + totalInterest + loan.insurance_amount) / months - principalDue - interestDue);
 
     const dueDate = addMonthsToDate(
       disbursementDate,
@@ -303,6 +297,7 @@ function generateInstallmentSchedule(loan, disbursementDate) {
     );
 
     principalScheduled += principalDue;
+    interestScheduled += interestDue;
     insuranceScheduled += insuranceDue;
   }
 }
@@ -642,31 +637,10 @@ router.post(
     const interest_rate =
       INTEREST_RATE_BY_TERM[term_years];
 
-    const monthly_installment =
-      Math.round(
-        (
-          principal / months +
-          principal * interest_rate / 100 / months +
-          principal * 0.01 / months +
-          Number.EPSILON
-        ) * 100
-      ) / 100;
-
-    const monthly_interest_amount =
-      Math.round(
-        (
-          principal *
-          interest_rate /
-          100 /
-          months +
-          Number.EPSILON
-        ) * 100
-      ) / 100;
-
-    const insurance_amount =
-      Math.round(
-        (principal * 0.01 + Number.EPSILON) * 100
-      ) / 100;
+    const total_interest = roundMoney(principal * interest_rate / 100);
+    const monthly_installment = roundMoney((principal + total_interest + roundMoney(principal * 0.01)) / months);
+    const monthly_interest_amount = roundMoney(total_interest / months);
+    const insurance_amount = roundMoney(principal * 0.01);
 
     const id = randomUUID();
     const warnings = [];
@@ -1463,9 +1437,27 @@ router.post(
     const amountResult = parseMoney(req.body?.amount, 'amount');
     if (amountResult.error) return res.status(400).json({ error: amountResult.error });
 
-    const result = previewLoanPayment(loan, { amount: amountResult.value });
+    const paymentMethod = req.body?.payment_method ?? 'cash';
+    const allocationMode = req.body?.allocation_mode ?? 'carry_forward';
+    if (!PAYMENT_METHODS.includes(paymentMethod)) {
+      return res.status(400).json({ error: `payment_method must be one of: ${PAYMENT_METHODS.join(', ')}` });
+    }
+    if (!ALLOCATION_MODES.includes(allocationMode)) {
+      return res.status(400).json({ error: `allocation_mode must be one of: ${ALLOCATION_MODES.join(', ')}` });
+    }
+
+    const result = previewLoanPayment(loan, {
+      amount: amountResult.value,
+      paymentMethod,
+      allocationMode,
+    });
+    if (result.invalid_allocation_mode) {
+      return res.status(400).json({ error: result.error });
+    }
     res.json({
       amount: amountResult.value,
+      payment_method: result.payment_method,
+      allocation_mode: result.allocation_mode,
       overpaid: result.overpaid,
       outstanding_balance: result.outstanding.total,
       next_installment: result.next_installment,
@@ -1487,7 +1479,8 @@ router.post(
  * oldest installment's interest + insurance + penalties and principal before
  * moving to the next installment. Penalty accrual (#48) runs first so the
  * amount being collected reflects the loan's current standing. Overpayment
- * is rejected outright — this release does not create unapplied credit.
+ * is rejected outright, except for the explicitly selected cash-rounding
+ * option which accepts at most 5 ETB above the current installment.
  */
 router.post(
   '/:id/payments',
@@ -1500,7 +1493,14 @@ router.post(
     if (!loan) {
       return res.status(404).json({ error: 'Loan not found' });
     }
-    const { amount, date, notes, idempotency_key: bodyIdempotencyKey } = req.body ?? {};
+    const {
+      amount,
+      date,
+      notes,
+      payment_method: paymentMethod = 'cash',
+      allocation_mode: allocationMode = 'carry_forward',
+      idempotency_key: bodyIdempotencyKey,
+    } = req.body ?? {};
     const idempotencyKey = req.get('Idempotency-Key') || bodyIdempotencyKey;
     if (typeof idempotencyKey !== 'string' || idempotencyKey.trim() === '' || idempotencyKey.length > 128) {
       return res.status(400).json({
@@ -1522,6 +1522,13 @@ router.post(
       return res.status(400).json({ error: amountResult.error });
     }
 
+    if (!PAYMENT_METHODS.includes(paymentMethod)) {
+      return res.status(400).json({ error: `payment_method must be one of: ${PAYMENT_METHODS.join(', ')}` });
+    }
+    if (!ALLOCATION_MODES.includes(allocationMode)) {
+      return res.status(400).json({ error: `allocation_mode must be one of: ${ALLOCATION_MODES.join(', ')}` });
+    }
+
     const paymentDate = (typeof date === 'string' && date.trim()) ? date.trim() : new Date().toISOString().slice(0, 10);
     if (date !== undefined && typeof date !== 'string') {
       return res.status(400).json({ error: 'date must be a string in YYYY-MM-DD format' });
@@ -1539,10 +1546,16 @@ router.post(
     const result = recordLoanPayment(loan, {
       amount: amountResult.value,
       paymentDate,
+      paymentMethod,
+      allocationMode,
       notes,
       recordedBy: administrator.id,
       idempotencyKey,
     });
+
+    if (result.invalid_allocation_mode) {
+      return res.status(400).json({ error: result.error });
+    }
 
     if (result.overpaid) {
       return res.status(409).json({

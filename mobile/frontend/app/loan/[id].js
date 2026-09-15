@@ -12,7 +12,7 @@ import { Button, ErrorState, Skeleton, StatusPill, ThemedAlert } from '../../src
 import { colors, useTheme, radii, shadow } from '../../src/theme';
 
 const money = (v) => 'ETB ' + Number(v ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 });
-const BUCKET_LABEL = { collection_expense: 'Collection expense', interest_penalty: 'Interest / insurance / penalty', principal: 'Principal' };
+const BUCKET_LABEL = { collection_expense: 'Collection expense', interest_penalty: 'Interest / insurance / penalty', principal: 'Principal', cash_rounding_adjustment: 'Cash rounding adjustment' };
 const INSTALLMENT_LABEL = { unpaid: 'Unpaid', partially_paid: 'Partially paid', paid: 'Paid' };
 
 // Only the named guarantor may respond, and only while the loan is still

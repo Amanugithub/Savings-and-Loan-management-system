@@ -283,9 +283,10 @@ router.post(
 
     const months = term_years * 12;
     const interest_rate = INTEREST_RATE_BY_TERM[term_years];
-    const monthly_installment = Math.round((principal / months + principal * interest_rate / 100 / months + principal * 0.01 / months) * 100) / 100;
-    const monthly_interest_amount = Math.round((principal * interest_rate / 100 / months) * 100) / 100;
-    const insurance_amount = Math.round(principal * 0.01 * 100) / 100;
+    const total_interest = round2(principal * interest_rate / 100);
+    const insurance_amount = round2(principal * 0.01);
+    const monthly_installment = round2((principal + total_interest + insurance_amount) / months);
+    const monthly_interest_amount = round2(total_interest / months);
 
     const { rows } = await pool.query(
       `INSERT INTO loans

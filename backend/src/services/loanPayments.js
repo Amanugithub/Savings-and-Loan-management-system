@@ -5,6 +5,9 @@ import { accrueLoanPenalties, getPenaltiesWithOutstanding } from './loanPenaltie
 // Overpayment tolerance for rounding noise between the client-supplied
 // amount and the sum of amounts computed here.
 const EPSILON = 0.005;
+export const PAYMENT_METHODS = ['cash', 'bank_transfer', 'mobile_money'];
+export const ALLOCATION_MODES = ['carry_forward', 'cash_rounding_current'];
+export const MAX_CASH_ROUNDING_EXCESS = 5;
 
 function roundMoney(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -23,14 +26,15 @@ const collectionExpenseOwedStmt = db.prepare(
 
 const updateInstallmentStmt = db.prepare(
   `UPDATE loan_installments
-   SET principal_paid = ?, interest_paid = ?, insurance_paid = ?, status = ?,
+   SET principal_due = ?, interest_due = ?, insurance_due = ?,
+       principal_paid = ?, interest_paid = ?, insurance_paid = ?, status = ?,
        updated_at = datetime('now'), synced_at = NULL
    WHERE id = ?`
 );
 
 const insertPaymentStmt = db.prepare(
-  `INSERT INTO loan_payments (id, loan_id, member_id, amount, payment_date, recorded_by, idempotency_key, notes, synced_at)
-   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`
+  `INSERT INTO loan_payments (id, loan_id, member_id, amount, payment_date, payment_method, recorded_by, idempotency_key, notes, synced_at)
+   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`
 );
 
 const insertAllocationStmt = db.prepare(
@@ -77,22 +81,12 @@ export function getOutstandingBalance(loan) {
   };
 }
 
-function createPaymentPlan(loan, amount) {
+function createPaymentPlan(loan, amount, {
+  paymentMethod = 'cash',
+  allocationMode = 'carry_forward',
+} = {}) {
   const outstanding = getOutstandingBalance(loan);
-  if (amount > outstanding.total + EPSILON) {
-    return {
-      overpaid: true,
-      outstanding,
-      allocations: [],
-      installments: installmentsStmt.all(loan.id),
-      remaining: amount,
-    };
-  }
-
-  let remaining = amount;
-  const allocations = [];
   const installments = installmentsStmt.all(loan.id);
-  const patches = new Map(installments.map((row) => [row.id, { ...row }]));
   const penaltiesByPeriod = new Map(
     getPenaltiesWithOutstanding(loan.id).map((penalty) => [penalty.penalty_period, { ...penalty }])
   );
@@ -114,6 +108,94 @@ function createPaymentPlan(loan, amount) {
         + (nextPenalty?.outstanding ?? 0)
       )
     : 0;
+  const amountAvailableForInstallment = Math.max(0, roundMoney(amount - outstanding.collection_expenses));
+  const excessOverInstallment = nextInstallment
+    ? Math.max(0, roundMoney(amountAvailableForInstallment - nextInstallmentDue))
+    : 0;
+
+  const isCashRoundingMode = allocationMode === 'cash_rounding_current';
+  const canAcceptSmallRoundingOverpayment = isCashRoundingMode
+    && paymentMethod === 'cash'
+    && excessOverInstallment <= MAX_CASH_ROUNDING_EXCESS + EPSILON;
+
+  if (amount > outstanding.total + EPSILON && !canAcceptSmallRoundingOverpayment) {
+    return {
+      overpaid: true,
+      outstanding,
+      allocations: [],
+      installments,
+      remaining: amount,
+      payment_method: paymentMethod,
+      allocation_mode: allocationMode,
+      next_installment: nextInstallment
+        ? {
+            installment_number: nextInstallment.installment_number,
+            due_date: nextInstallment.due_date,
+            principal_remaining: roundMoney(nextInstallment.principal_due - nextInstallment.principal_paid),
+            interest_remaining: roundMoney(nextInstallment.interest_due - nextInstallment.interest_paid),
+            insurance_remaining: roundMoney(nextInstallment.insurance_due - nextInstallment.insurance_paid),
+            penalty_remaining: roundMoney(nextPenalty?.outstanding ?? 0),
+            total_remaining: nextInstallmentDue,
+          }
+        : null,
+      amount_for_installment: amountAvailableForInstallment,
+      shortfall: nextInstallment
+        ? Math.max(0, roundMoney(nextInstallmentDue - amountAvailableForInstallment))
+        : 0,
+      excess_over_installment: excessOverInstallment,
+    };
+  }
+
+  if (isCashRoundingMode && paymentMethod !== 'cash') {
+    return {
+      invalid_allocation_mode: true,
+      error: 'cash_rounding_current is only available for cash payments',
+      outstanding,
+      allocations: [],
+      installments,
+      remaining: amount,
+      payment_method: paymentMethod,
+      allocation_mode: allocationMode,
+    };
+  }
+
+  if (isCashRoundingMode && excessOverInstallment > MAX_CASH_ROUNDING_EXCESS + EPSILON) {
+    return {
+      invalid_allocation_mode: true,
+      error: `Cash rounding can cover at most ${MAX_CASH_ROUNDING_EXCESS.toFixed(2)} ETB above the current installment`,
+      outstanding,
+      allocations: [],
+      installments,
+      remaining: amount,
+      payment_method: paymentMethod,
+      allocation_mode: allocationMode,
+      excess_over_installment: excessOverInstallment,
+    };
+  }
+
+  let remaining = amount;
+  const allocations = [];
+  const patches = new Map(installments.map((row) => [row.id, { ...row }]));
+  let cashRoundingAdjustment = 0;
+
+  // A cash rounding adjustment is recorded against the current installment,
+  // while the final installment's principal is reduced by the same amount.
+  // This keeps the loan balance and eventual payoff amount correct without
+  // silently moving the receipt into a future month. If the current
+  // installment is the final one, the small excess is accepted as a rounding
+  // overpayment and the loan can close normally.
+  if (isCashRoundingMode && excessOverInstallment > EPSILON) {
+    cashRoundingAdjustment = excessOverInstallment;
+    const finalInstallment = installments[installments.length - 1];
+    if (nextInstallment && finalInstallment && nextInstallment.id !== finalInstallment.id) {
+      const finalPatch = patches.get(finalInstallment.id);
+      const reducible = Math.min(
+        cashRoundingAdjustment,
+        Math.max(0, roundMoney(finalPatch.principal_due - finalPatch.principal_paid))
+      );
+      finalPatch.principal_due = roundMoney(finalPatch.principal_due - reducible);
+    }
+  }
 
   const allocate = (bucket, due, installmentId, penaltyId) => {
     const owed = roundMoney(due);
@@ -171,6 +253,13 @@ function createPaymentPlan(loan, amount) {
       null
     );
     patch.principal_paid = roundMoney(patch.principal_paid + appliedPrincipal);
+
+    if (isCashRoundingMode && nextInstallment?.id === installment.id) {
+      if (cashRoundingAdjustment > EPSILON) {
+        allocate('cash_rounding_adjustment', cashRoundingAdjustment, installment.id, null);
+      }
+      break;
+    }
   }
 
   const updatedInstallments = installments.map((installment) => {
@@ -178,14 +267,15 @@ function createPaymentPlan(loan, amount) {
     return { ...patch, status: installmentStatus(patch) };
   });
 
-  const amountAvailableForInstallment = Math.max(0, roundMoney(amount - outstanding.collection_expenses));
-
   return {
     overpaid: false,
+    payment_method: paymentMethod,
+    allocation_mode: allocationMode,
     outstanding,
     allocations,
     installments: updatedInstallments,
     remaining,
+    cash_rounding_adjustment: cashRoundingAdjustment,
     next_installment: nextInstallment
       ? {
           installment_number: nextInstallment.installment_number,
@@ -201,16 +291,14 @@ function createPaymentPlan(loan, amount) {
     shortfall: nextInstallment
       ? Math.max(0, roundMoney(nextInstallmentDue - amountAvailableForInstallment))
       : 0,
-    excess_over_installment: nextInstallment
-      ? Math.max(0, roundMoney(amountAvailableForInstallment - nextInstallmentDue))
-      : 0,
+    excess_over_installment: excessOverInstallment,
   };
 }
 
-export function previewLoanPayment(loan, { amount }) {
+export function previewLoanPayment(loan, { amount, paymentMethod = 'cash', allocationMode = 'carry_forward' }) {
   return db.transaction(() => {
     accrueLoanPenalties(loan);
-    return createPaymentPlan(loan, amount);
+    return createPaymentPlan(loan, amount, { paymentMethod, allocationMode });
   })();
 }
 
@@ -225,11 +313,19 @@ export function previewLoanPayment(loan, { amount }) {
  * update commit together or none of them do.
  *
  * Returns { overpaid: true, outstanding } without writing anything if
- * `amount` exceeds what's left on the loan — this release does not create
- * unapplied credit, so an overpayment is rejected outright rather than
- * partially applied.
+ * `amount` exceeds what's left on the loan. The only exception is an
+ * explicitly selected cash rounding adjustment of at most 5 ETB above the
+ * current installment.
  */
-export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy, idempotencyKey }) {
+export function recordLoanPayment(loan, {
+  amount,
+  paymentDate,
+  paymentMethod = 'cash',
+  allocationMode = 'carry_forward',
+  notes,
+  recordedBy,
+  idempotencyKey,
+}) {
   return db.transaction(() => {
     const existing = db.prepare(
       'SELECT * FROM loan_payments WHERE loan_id = ? AND idempotency_key = ?'
@@ -257,7 +353,8 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
 
     accrueLoanPenalties(loan);
 
-    const plan = createPaymentPlan(loan, amount);
+    const plan = createPaymentPlan(loan, amount, { paymentMethod, allocationMode });
+    if (plan.invalid_allocation_mode) return plan;
     if (plan.overpaid) return plan;
 
     const paymentId = randomUUID();
@@ -267,6 +364,7 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
       loan.member_id,
       amount,
       paymentDate,
+      paymentMethod,
       recordedBy,
       idempotencyKey,
       notes ?? null
@@ -297,7 +395,16 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
 
     const updatedInstallments = [];
     for (const installment of plan.installments) {
-      updateInstallmentStmt.run(installment.principal_paid, installment.interest_paid, installment.insurance_paid, installment.status, installment.id);
+      updateInstallmentStmt.run(
+        installment.principal_due,
+        installment.interest_due,
+        installment.insurance_due,
+        installment.principal_paid,
+        installment.interest_paid,
+        installment.insurance_paid,
+        installment.status,
+        installment.id
+      );
       updatedInstallments.push(installment);
     }
 

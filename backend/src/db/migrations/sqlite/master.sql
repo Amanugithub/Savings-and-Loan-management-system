@@ -222,6 +222,7 @@ CREATE TABLE loan_payments (
     member_id TEXT NOT NULL REFERENCES members(id),
     amount NUMERIC NOT NULL CHECK (amount > 0),
     payment_date TEXT NOT NULL,
+    payment_method TEXT NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'bank_transfer', 'mobile_money')),
     recorded_by TEXT NOT NULL REFERENCES administrators(id),
     idempotency_key TEXT,
     notes TEXT,
@@ -255,7 +256,8 @@ CREATE TABLE loan_payment_allocations (
         bucket IN (
             'collection_expense',
             'interest_penalty',
-            'principal'
+            'principal',
+            'cash_rounding_adjustment'
         )
     ),
 

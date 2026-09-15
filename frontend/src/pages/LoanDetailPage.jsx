@@ -9,6 +9,7 @@ import { LoanStatusBadge } from "@/components/loans/loan-status-badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/context/AuthContext"
 import { useAdministrators } from "@/hooks/use-administrators"
@@ -128,6 +129,8 @@ function RecordPaymentCard({ loan }) {
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(todayGregorianIso())
   const [notes, setNotes] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("cash")
+  const [allocationMode, setAllocationMode] = useState("carry_forward")
   const [lastResult, setLastResult] = useState(null)
   const [preview, setPreview] = useState(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -141,12 +144,17 @@ function RecordPaymentCard({ loan }) {
     : 0
   const money = (value) => `ETB ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-  const submit = (event) => {
-    event.preventDefault()
+  const reviewPayment = (mode = allocationMode) => {
+    setAllocationMode(mode)
     previewMutation.mutate(
-      { id: loan.id, amount: Number(amount) },
+      { id: loan.id, amount: Number(amount), payment_method: paymentMethod, allocation_mode: mode },
       { onSuccess: (result) => { setPreview(result); setConfirmOpen(true) } },
     )
+  }
+
+  const submit = (event) => {
+    event.preventDefault()
+    reviewPayment()
   }
 
   const confirmPayment = () => {
@@ -155,7 +163,7 @@ function RecordPaymentCard({ loan }) {
       return
     }
     mutation.mutate(
-      { id: loan.id, amount: Number(amount), date, notes: notes || undefined, idempotencyKey },
+      { id: loan.id, amount: Number(amount), date, notes: notes || undefined, idempotencyKey, payment_method: paymentMethod, allocation_mode: preview.allocation_mode },
       {
         onSuccess: (result) => {
           setLastResult(result)
@@ -169,10 +177,13 @@ function RecordPaymentCard({ loan }) {
     )
   }
 
-  const bucketLabel = { collection_expense: "Collection expense", interest_penalty: "Interest / insurance / penalty", principal: "Principal" }
+  const bucketLabel = { collection_expense: "Collection expense", interest_penalty: "Interest / insurance / penalty", principal: "Principal", cash_rounding_adjustment: "Cash rounding adjustment" }
+  const canChooseCashRounding = paymentMethod === "cash" && preview && !preview.overpaid && preview.excess_over_installment > 0 && preview.excess_over_installment <= 5
+  const alternateAllocationMode = preview?.allocation_mode === "cash_rounding_current" ? "carry_forward" : "cash_rounding_current"
+  const alternateAllocationLabel = preview?.allocation_mode === "cash_rounding_current" ? "Carry excess forward" : "Keep excess on current installment"
   const previewDescription = preview?.overpaid
     ? <div className="space-y-3"><p>This amount is greater than the loan&apos;s total outstanding balance. No payment has been recorded.</p><p className="font-medium">Outstanding balance: {money(preview.outstanding_balance)}</p><p>Change the amount before recording the payment.</p></div>
-    : preview && <div className="space-y-4"><div className="rounded-xl border bg-muted/40 p-3"><p className="font-medium">Payment amount: {money(preview.amount)}</p><p className="mt-1 text-muted-foreground">Installment #{preview.next_installment?.installment_number} currently needs {money(preview.next_installment?.total_remaining)}.</p></div>{preview.shortfall > 0 && <p className="text-amber-700 dark:text-amber-300">This payment is {money(preview.shortfall)} short of the current installment, so it will remain partially paid.</p>}{preview.excess_over_installment > 0 && <p className="text-amber-700 dark:text-amber-300">This payment exceeds the current installment by {money(preview.excess_over_installment)}. The excess will be applied to the next installment automatically.</p>}<div><p className="font-medium">Planned allocation</p><ul className="mt-2 space-y-1 text-sm">{preview.allocations.map((allocation, index) => <li key={`${allocation.bucket}-${allocation.installment_id || allocation.penalty_id || index}`} className="flex justify-between gap-4"><span>{bucketLabel[allocation.bucket] || allocation.bucket}{allocation.installment_number ? ` · installment #${allocation.installment_number}` : ""}</span><span className="font-medium">{money(allocation.amount)}</span></li>)}</ul></div><p className="text-sm text-muted-foreground">The payment date records when the receipt was taken. It does not choose an installment; payments always apply to the oldest unpaid balance.</p></div>
+    : preview && <div className="space-y-4"><div className="rounded-xl border bg-muted/40 p-3"><p className="font-medium">Payment amount: {money(preview.amount)}</p><p className="mt-1 text-muted-foreground">Installment #{preview.next_installment?.installment_number} currently needs {money(preview.next_installment?.total_remaining)}.</p></div>{preview.shortfall > 0 && <p className="text-amber-700 dark:text-amber-300">This payment is {money(preview.shortfall)} short of the current installment, so it will remain partially paid.</p>}{preview.excess_over_installment > 0 && <p className="text-amber-700 dark:text-amber-300">This payment exceeds the current installment by {money(preview.excess_over_installment)}. {preview.allocation_mode === "cash_rounding_current" ? "The selected cash-rounding option records the excess against this loan and reduces the final scheduled principal." : "The excess will be applied to the next installment automatically."}</p>}<div><p className="font-medium">Planned allocation</p><ul className="mt-2 space-y-1 text-sm">{preview.allocations.map((allocation, index) => <li key={`${allocation.bucket}-${allocation.installment_id || allocation.penalty_id || index}`} className="flex justify-between gap-4"><span>{bucketLabel[allocation.bucket] || allocation.bucket}{allocation.installment_number ? ` · installment #${allocation.installment_number}` : ""}</span><span className="font-medium">{money(allocation.amount)}</span></li>)}</ul></div><p className="text-sm text-muted-foreground">The payment date records when the receipt was taken. It does not choose an installment; payments always apply to the oldest unpaid balance.</p></div>
 
   return <Card>
     <CardHeader><CardTitle className="flex items-center gap-2"><ReceiptText /> Record a payment</CardTitle><CardDescription>Review the exact allocation before saving. Payments apply to the oldest unpaid installment first.</CardDescription></CardHeader>
@@ -182,6 +193,7 @@ function RecordPaymentCard({ loan }) {
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-amount">Amount<Input id="payment-amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={nextInstallmentAmount ? nextInstallmentAmount.toFixed(2) : "0.00"} required /></label>
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-date">Payment date<DatePicker value={date} onChange={setDate} aria-label="Payment date" /><span className="text-xs font-normal text-muted-foreground">Receipt date only; it does not select the installment.</span></label>
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-notes">Notes (optional)<Input id="payment-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+        <label className="flex flex-col gap-2 text-sm font-medium">Payment method<Select value={paymentMethod} onValueChange={setPaymentMethod} items={[{ value: "cash", label: "Cash" }, { value: "bank_transfer", label: "Bank transfer" }, { value: "mobile_money", label: "Mobile money" }]}><SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger><SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="bank_transfer">Bank transfer</SelectItem><SelectItem value="mobile_money">Mobile money</SelectItem></SelectContent></Select><span className="text-xs font-normal text-muted-foreground">Cash payments up to 5 ETB above one installment can be kept as a rounding adjustment.</span></label>
         <div className="sm:col-span-3">
           <Button type="submit" disabled={mutation.isPending || previewMutation.isPending}>{previewMutation.isPending ? "Calculating allocation…" : mutation.isPending ? "Recording…" : "Review allocation"}</Button>
         </div>
@@ -207,7 +219,7 @@ function RecordPaymentCard({ loan }) {
           <p className="mt-3 text-sm">Outstanding balance now: <span className="font-semibold">ETB {Number(lastResult.outstanding_balance).toLocaleString()}</span></p>
         </div>
       )}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen} title={preview?.overpaid ? "Payment exceeds loan balance" : "Confirm payment allocation"} description={previewDescription} confirmLabel={preview?.overpaid ? "Change amount" : "Record payment"} destructive={Boolean(preview?.overpaid)} onConfirm={confirmPayment} disabled={mutation.isPending} />
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen} title={preview?.overpaid ? "Payment exceeds loan balance" : "Confirm payment allocation"} description={previewDescription} confirmLabel={preview?.overpaid ? "Change amount" : "Record payment"} secondaryLabel={canChooseCashRounding ? alternateAllocationLabel : undefined} onSecondary={() => reviewPayment(alternateAllocationMode)} destructive={Boolean(preview?.overpaid)} onConfirm={confirmPayment} disabled={mutation.isPending} secondaryDisabled={previewMutation.isPending} />
     </CardContent>
   </Card>
 }
