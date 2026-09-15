@@ -48,3 +48,10 @@ export function recordLoanPayment({ id, amount, date, notes, idempotencyKey }) {
     body: JSON.stringify({ amount, date, notes }),
   })
 }
+
+export function previewLoanPayment({ id, amount }) {
+  return apiRequest(`/loans/${id}/payments/preview`, {
+    method: "POST",
+    body: JSON.stringify({ amount }),
+  })
+}

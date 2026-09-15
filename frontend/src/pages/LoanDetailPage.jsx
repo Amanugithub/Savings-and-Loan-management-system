@@ -20,6 +20,7 @@ import {
   useDisburseLoan,
   useLoan,
   useRecommendLoan,
+  usePreviewLoanPayment,
   useRecordLoanPayment,
   useRespondAsGuarantor,
 } from "@/hooks/use-loans"
@@ -122,15 +123,37 @@ function ScheduleAndPenalties({ loan }) {
 }
 
 function RecordPaymentCard({ loan }) {
+  const previewMutation = usePreviewLoanPayment()
   const mutation = useRecordLoanPayment()
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(todayGregorianIso())
   const [notes, setNotes] = useState("")
   const [lastResult, setLastResult] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID())
+
+  const nextInstallment = loan.schedule?.find((installment) => installment.status !== "paid")
+  const nextInstallmentAmount = nextInstallment
+    ? Number(nextInstallment.principal_due) - Number(nextInstallment.principal_paid)
+      + Number(nextInstallment.interest_due) - Number(nextInstallment.interest_paid)
+      + Number(nextInstallment.insurance_due) - Number(nextInstallment.insurance_paid)
+    : 0
+  const money = (value) => `ETB ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const submit = (event) => {
     event.preventDefault()
+    previewMutation.mutate(
+      { id: loan.id, amount: Number(amount) },
+      { onSuccess: (result) => { setPreview(result); setConfirmOpen(true) } },
+    )
+  }
+
+  const confirmPayment = () => {
+    if (preview?.overpaid) {
+      setConfirmOpen(false)
+      return
+    }
     mutation.mutate(
       { id: loan.id, amount: Number(amount), date, notes: notes || undefined, idempotencyKey },
       {
@@ -138,26 +161,33 @@ function RecordPaymentCard({ loan }) {
           setLastResult(result)
           setAmount("")
           setNotes("")
+          setPreview(null)
+          setConfirmOpen(false)
           setIdempotencyKey(crypto.randomUUID())
         },
-      }
+      },
     )
   }
 
   const bucketLabel = { collection_expense: "Collection expense", interest_penalty: "Interest / insurance / penalty", principal: "Principal" }
+  const previewDescription = preview?.overpaid
+    ? <div className="space-y-3"><p>This amount is greater than the loan&apos;s total outstanding balance. No payment has been recorded.</p><p className="font-medium">Outstanding balance: {money(preview.outstanding_balance)}</p><p>Change the amount before recording the payment.</p></div>
+    : preview && <div className="space-y-4"><div className="rounded-xl border bg-muted/40 p-3"><p className="font-medium">Payment amount: {money(preview.amount)}</p><p className="mt-1 text-muted-foreground">Installment #{preview.next_installment?.installment_number} currently needs {money(preview.next_installment?.total_remaining)}.</p></div>{preview.shortfall > 0 && <p className="text-amber-700 dark:text-amber-300">This payment is {money(preview.shortfall)} short of the current installment, so it will remain partially paid.</p>}{preview.excess_over_installment > 0 && <p className="text-amber-700 dark:text-amber-300">This payment exceeds the current installment by {money(preview.excess_over_installment)}. The excess will be applied to the next installment automatically.</p>}<div><p className="font-medium">Planned allocation</p><ul className="mt-2 space-y-1 text-sm">{preview.allocations.map((allocation, index) => <li key={`${allocation.bucket}-${allocation.installment_id || allocation.penalty_id || index}`} className="flex justify-between gap-4"><span>{bucketLabel[allocation.bucket] || allocation.bucket}{allocation.installment_number ? ` · installment #${allocation.installment_number}` : ""}</span><span className="font-medium">{money(allocation.amount)}</span></li>)}</ul></div><p className="text-sm text-muted-foreground">The payment date records when the receipt was taken. It does not choose an installment; payments always apply to the oldest unpaid balance.</p></div>
 
   return <Card>
-    <CardHeader><CardTitle className="flex items-center gap-2"><ReceiptText /> Record a payment</CardTitle><CardDescription>Allocated to the oldest unpaid installment: collection expenses, then interest/insurance/penalties, then principal. Scheduled monthly payment: ETB {Number(loan.monthly_installment).toLocaleString()}.</CardDescription></CardHeader>
+    <CardHeader><CardTitle className="flex items-center gap-2"><ReceiptText /> Record a payment</CardTitle><CardDescription>Review the exact allocation before saving. Payments apply to the oldest unpaid installment first.</CardDescription></CardHeader>
     <CardContent className="flex flex-col gap-4">
+      {nextInstallment && <div className="rounded-xl border bg-muted/40 p-4"><div className="flex flex-wrap items-baseline justify-between gap-2"><p className="font-medium">Next installment: #{nextInstallment.installment_number}</p><p className="font-heading text-xl font-semibold">{money(nextInstallmentAmount)}</p></div><p className="mt-1 text-sm text-muted-foreground">Principal {money(Number(nextInstallment.principal_due) - Number(nextInstallment.principal_paid))} · Interest {money(Number(nextInstallment.interest_due) - Number(nextInstallment.interest_paid))} · Insurance {money(Number(nextInstallment.insurance_due) - Number(nextInstallment.insurance_paid))}</p><p className="mt-2 text-xs text-muted-foreground">The stored monthly installment is {money(loan.monthly_installment)}. The exact remaining amount above accounts for rounding and previous partial payments.</p></div>}
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-3">
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-amount">Amount<Input id="payment-amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></label>
-        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-date">Date<DatePicker value={date} onChange={setDate} aria-label="Payment date" /></label>
+        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-amount">Amount<Input id="payment-amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder={nextInstallmentAmount ? nextInstallmentAmount.toFixed(2) : "0.00"} required /></label>
+        <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-date">Payment date<DatePicker value={date} onChange={setDate} aria-label="Payment date" /><span className="text-xs font-normal text-muted-foreground">Receipt date only; it does not select the installment.</span></label>
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-notes">Notes (optional)<Input id="payment-notes" value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
         <div className="sm:col-span-3">
-          <Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? "Recording…" : "Record payment"}</Button>
+          <Button type="submit" disabled={mutation.isPending || previewMutation.isPending}>{previewMutation.isPending ? "Calculating allocation…" : mutation.isPending ? "Recording…" : "Review allocation"}</Button>
         </div>
       </form>
 
+      {previewMutation.error && <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{previewMutation.error.message}</p>}
       {mutation.error && (
         <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {mutation.error.status === 409
@@ -177,6 +207,7 @@ function RecordPaymentCard({ loan }) {
           <p className="mt-3 text-sm">Outstanding balance now: <span className="font-semibold">ETB {Number(lastResult.outstanding_balance).toLocaleString()}</span></p>
         </div>
       )}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen} title={preview?.overpaid ? "Payment exceeds loan balance" : "Confirm payment allocation"} description={previewDescription} confirmLabel={preview?.overpaid ? "Change amount" : "Record payment"} destructive={Boolean(preview?.overpaid)} onConfirm={confirmPayment} disabled={mutation.isPending} />
     </CardContent>
   </Card>
 }

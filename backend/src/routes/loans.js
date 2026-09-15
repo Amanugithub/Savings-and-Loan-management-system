@@ -5,7 +5,7 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole, INTAKE_LEVEL } from '../middleware/roles.js';
 import { accrueLoanPenalties, getLoanPenaltySummary } from '../services/loanPenalties.js';
-import { recordLoanPayment } from '../services/loanPayments.js';
+import { previewLoanPayment, recordLoanPayment } from '../services/loanPayments.js';
 
 const router = Router();
 
@@ -1434,6 +1434,45 @@ router.patch(
     res.json({
       loan: updatedLoan,
       installments,
+    });
+  })
+);
+
+/**
+ * POST /api/loans/:id/payments/preview
+ *
+ * Calculates the exact allocation without recording a payment. The web admin
+ * uses this response to explain short payments and amounts that continue into
+ * the next installment before the cashier confirms the receipt.
+ */
+router.post(
+  '/:id/payments/preview',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const administrator = requireLoanRole(req, res, ['cashier']);
+    if (!administrator) return;
+
+    const loan = db.prepare('SELECT * FROM loans WHERE id = ?').get(req.params.id);
+    if (!loan) return res.status(404).json({ error: 'Loan not found' });
+    if (loan.status !== 'active') {
+      return res.status(400).json({
+        error: `Cannot preview a payment for a loan with status '${loan.status}'. Loan must be 'active'.`,
+      });
+    }
+
+    const amountResult = parseMoney(req.body?.amount, 'amount');
+    if (amountResult.error) return res.status(400).json({ error: amountResult.error });
+
+    const result = previewLoanPayment(loan, { amount: amountResult.value });
+    res.json({
+      amount: amountResult.value,
+      overpaid: result.overpaid,
+      outstanding_balance: result.outstanding.total,
+      next_installment: result.next_installment,
+      amount_for_installment: result.amount_for_installment,
+      shortfall: result.shortfall,
+      excess_over_installment: result.excess_over_installment,
+      allocations: result.allocations,
     });
   })
 );

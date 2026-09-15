@@ -9,6 +9,7 @@ import {
   getLoan,
   getLoans,
   recommendLoan,
+  previewLoanPayment,
   recordLoanPayment,
   respondAsGuarantor,
 } from "@/api/loans"
@@ -75,4 +76,8 @@ export function useDisburseLoan() {
 
 export function useRecordLoanPayment() {
   return useLoanTransition(recordLoanPayment, () => undefined)
+}
+
+export function usePreviewLoanPayment() {
+  return useMutation({ mutationFn: previewLoanPayment })
 }

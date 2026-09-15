@@ -77,10 +77,147 @@ export function getOutstandingBalance(loan) {
   };
 }
 
+function createPaymentPlan(loan, amount) {
+  const outstanding = getOutstandingBalance(loan);
+  if (amount > outstanding.total + EPSILON) {
+    return {
+      overpaid: true,
+      outstanding,
+      allocations: [],
+      installments: installmentsStmt.all(loan.id),
+      remaining: amount,
+    };
+  }
+
+  let remaining = amount;
+  const allocations = [];
+  const installments = installmentsStmt.all(loan.id);
+  const patches = new Map(installments.map((row) => [row.id, { ...row }]));
+  const penaltiesByPeriod = new Map(
+    getPenaltiesWithOutstanding(loan.id).map((penalty) => [penalty.penalty_period, { ...penalty }])
+  );
+  const nextInstallment = installments.find((installment) => {
+    const penalty = penaltiesByPeriod.get(installment.due_date.slice(0, 7));
+    return installment.principal_due > installment.principal_paid
+      || installment.interest_due > installment.interest_paid
+      || installment.insurance_due > installment.insurance_paid
+      || penalty?.outstanding > 0;
+  });
+  const nextPenalty = nextInstallment
+    ? penaltiesByPeriod.get(nextInstallment.due_date.slice(0, 7))
+    : null;
+  const nextInstallmentDue = nextInstallment
+    ? roundMoney(
+        Math.max(0, nextInstallment.principal_due - nextInstallment.principal_paid)
+        + Math.max(0, nextInstallment.interest_due - nextInstallment.interest_paid)
+        + Math.max(0, nextInstallment.insurance_due - nextInstallment.insurance_paid)
+        + (nextPenalty?.outstanding ?? 0)
+      )
+    : 0;
+
+  const allocate = (bucket, due, installmentId, penaltyId) => {
+    const owed = roundMoney(due);
+    if (remaining <= 0 || owed <= 0) return 0;
+    const applied = roundMoney(Math.min(remaining, owed));
+    if (applied <= 0) return 0;
+
+    const installment = installmentId
+      ? installments.find((row) => row.id === installmentId)
+      : null;
+    allocations.push({
+      bucket,
+      amount: applied,
+      installment_id: installmentId ?? null,
+      installment_number: installment?.installment_number ?? null,
+      due_date: installment?.due_date ?? null,
+      penalty_id: penaltyId ?? null,
+    });
+    remaining = roundMoney(remaining - applied);
+    return applied;
+  };
+
+  allocate('collection_expense', outstanding.collection_expenses, null, null);
+
+  for (const installment of installments) {
+    const patch = patches.get(installment.id);
+
+    const appliedInterest = allocate(
+      'interest_penalty',
+      patch.interest_due - patch.interest_paid,
+      installment.id,
+      null
+    );
+    patch.interest_paid = roundMoney(patch.interest_paid + appliedInterest);
+
+    const appliedInsurance = allocate(
+      'interest_penalty',
+      patch.insurance_due - patch.insurance_paid,
+      installment.id,
+      null
+    );
+    patch.insurance_paid = roundMoney(patch.insurance_paid + appliedInsurance);
+
+    const period = installment.due_date.slice(0, 7);
+    const penalty = penaltiesByPeriod.get(period);
+    if (penalty) {
+      const appliedPenalty = allocate('interest_penalty', penalty.outstanding, null, penalty.id);
+      penalty.outstanding = roundMoney(penalty.outstanding - appliedPenalty);
+    }
+
+    const appliedPrincipal = allocate(
+      'principal',
+      patch.principal_due - patch.principal_paid,
+      installment.id,
+      null
+    );
+    patch.principal_paid = roundMoney(patch.principal_paid + appliedPrincipal);
+  }
+
+  const updatedInstallments = installments.map((installment) => {
+    const patch = patches.get(installment.id);
+    return { ...patch, status: installmentStatus(patch) };
+  });
+
+  const amountAvailableForInstallment = Math.max(0, roundMoney(amount - outstanding.collection_expenses));
+
+  return {
+    overpaid: false,
+    outstanding,
+    allocations,
+    installments: updatedInstallments,
+    remaining,
+    next_installment: nextInstallment
+      ? {
+          installment_number: nextInstallment.installment_number,
+          due_date: nextInstallment.due_date,
+          principal_remaining: roundMoney(nextInstallment.principal_due - nextInstallment.principal_paid),
+          interest_remaining: roundMoney(nextInstallment.interest_due - nextInstallment.interest_paid),
+          insurance_remaining: roundMoney(nextInstallment.insurance_due - nextInstallment.insurance_paid),
+          penalty_remaining: roundMoney(nextPenalty?.outstanding ?? 0),
+          total_remaining: nextInstallmentDue,
+        }
+      : null,
+    amount_for_installment: amountAvailableForInstallment,
+    shortfall: nextInstallment
+      ? Math.max(0, roundMoney(nextInstallmentDue - amountAvailableForInstallment))
+      : 0,
+    excess_over_installment: nextInstallment
+      ? Math.max(0, roundMoney(amountAvailableForInstallment - nextInstallmentDue))
+      : 0,
+  };
+}
+
+export function previewLoanPayment(loan, { amount }) {
+  return db.transaction(() => {
+    accrueLoanPenalties(loan);
+    return createPaymentPlan(loan, amount);
+  })();
+}
+
 /**
  * Records a payment against a loan and allocates it across the Article 16
- * waterfall: collection expenses first, then interest/insurance/penalties
- * interest/insurance/penalties, then principal for each oldest installment
+ * waterfall: collection expenses first, then interest/insurance/penalties,
+ * then principal for each oldest installment
  * before moving to the next installment. This keeps a normal monthly payment
  * attached to one monthly installment instead of paying interest across the
  * entire schedule before any principal. The whole thing runs as one atomic
@@ -99,7 +236,11 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
     ).get(loan.id, idempotencyKey);
     if (existing) {
       const allocations = db.prepare(
-        'SELECT * FROM loan_payment_allocations WHERE payment_id = ? ORDER BY created_at ASC'
+        `SELECT a.*, i.installment_number, i.due_date
+         FROM loan_payment_allocations a
+         LEFT JOIN loan_installments i ON i.id = a.installment_id
+         WHERE a.payment_id = ?
+         ORDER BY a.created_at ASC`
       ).all(existing.id);
       const installments = installmentsStmt.all(loan.id);
       const currentLoan = db.prepare('SELECT status FROM loans WHERE id = ?').get(loan.id);
@@ -116,10 +257,8 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
 
     accrueLoanPenalties(loan);
 
-    const outstanding = getOutstandingBalance(loan);
-    if (amount > outstanding.total + EPSILON) {
-      return { overpaid: true, outstanding };
-    }
+    const plan = createPaymentPlan(loan, amount);
+    if (plan.overpaid) return plan;
 
     const paymentId = randomUUID();
     insertPaymentStmt.run(
@@ -133,87 +272,33 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
       notes ?? null
     );
 
-    let remaining = amount;
-    const allocations = [];
-
-    const allocate = (bucket, due, installmentId, penaltyId) => {
-      const owed = roundMoney(due);
-      if (remaining <= 0 || owed <= 0) return 0;
-      const applied = roundMoney(Math.min(remaining, owed));
-      if (applied <= 0) return 0;
-
-      const id = randomUUID();
-      insertAllocationStmt.run(id, paymentId, loan.id, bucket, applied, installmentId ?? null, penaltyId ?? null);
-      allocations.push({
-        id,
-        payment_id: paymentId,
-        loan_id: loan.id,
-        bucket,
-        amount: applied,
-        installment_id: installmentId ?? null,
-        penalty_id: penaltyId ?? null,
-      });
-      remaining = roundMoney(remaining - applied);
-      return applied;
-    };
-
-    // Bucket 1: collection expenses charged to recovering this loan.
-    allocate('collection_expense', outstanding.collection_expenses, null, null);
-
-    // Buckets 2 and 3 are applied one installment at a time, oldest due
-    // installment first. A monthly payment therefore clears that month's
-    // interest/insurance/penalty and then its principal before moving on.
-    const installments = installmentsStmt.all(loan.id);
-    const patches = new Map(installments.map((row) => [row.id, { ...row }]));
-    const penaltiesByPeriod = new Map(
-      getPenaltiesWithOutstanding(loan.id).map((penalty) => [penalty.penalty_period, { ...penalty }])
-    );
-
-    for (const installment of installments) {
-      const patch = patches.get(installment.id);
-
-      const appliedInterest = allocate(
-        'interest_penalty',
-        patch.interest_due - patch.interest_paid,
-        installment.id,
-        null
-      );
-      patch.interest_paid = roundMoney(patch.interest_paid + appliedInterest);
-
-      const appliedInsurance = allocate(
-        'interest_penalty',
-        patch.insurance_due - patch.insurance_paid,
-        installment.id,
-        null
-      );
-      patch.insurance_paid = roundMoney(patch.insurance_paid + appliedInsurance);
-
-      const period = installment.due_date.slice(0, 7);
-      const penalty = penaltiesByPeriod.get(period);
-      if (penalty) {
-        const appliedPenalty = allocate('interest_penalty', penalty.outstanding, null, penalty.id);
-        penalty.outstanding = roundMoney(penalty.outstanding - appliedPenalty);
-      }
-
-      const appliedPrincipal = allocate(
-        'principal',
-        patch.principal_due - patch.principal_paid,
-        installment.id,
-        null
-      );
-      patch.principal_paid = roundMoney(patch.principal_paid + appliedPrincipal);
-    }
-
-    if (remaining > EPSILON) {
+    if (plan.remaining > EPSILON) {
       throw new Error('PAYMENT_ALLOCATION_MISMATCH');
     }
 
+    const allocations = plan.allocations.map((allocation) => {
+      const id = randomUUID();
+      insertAllocationStmt.run(
+        id,
+        paymentId,
+        loan.id,
+        allocation.bucket,
+        allocation.amount,
+        allocation.installment_id,
+        allocation.penalty_id,
+      );
+      return {
+        id,
+        payment_id: paymentId,
+        loan_id: loan.id,
+        ...allocation,
+      };
+    });
+
     const updatedInstallments = [];
-    for (const installment of installments) {
-      const patch = patches.get(installment.id);
-      const status = installmentStatus(patch);
-      updateInstallmentStmt.run(patch.principal_paid, patch.interest_paid, patch.insurance_paid, status, installment.id);
-      updatedInstallments.push({ ...patch, status });
+    for (const installment of plan.installments) {
+      updateInstallmentStmt.run(installment.principal_paid, installment.interest_paid, installment.insurance_paid, installment.status, installment.id);
+      updatedInstallments.push(installment);
     }
 
     const outstandingBalance = getOutstandingBalance(loan);

@@ -99,6 +99,39 @@ describe('payment waterfall', () => {
     assert.equal(res.body.installments[1].principal_paid, 0, 'future installment principal must not be collected early');
   });
 
+  test('payment preview explains rounding shortfalls and payments that continue into the next installment', async () => {
+    const { loanId } = await activeLoan({ principal: 24000, termYears: 3 });
+    const shortPayment = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
+      token: tokens.cashier,
+      body: { amount: 740 },
+    });
+    assert.equal(shortPayment.status, 200);
+    assert.equal(shortPayment.body.next_installment.installment_number, 1);
+    assert.equal(shortPayment.body.next_installment.total_remaining, 740.01);
+    assert.equal(shortPayment.body.shortfall, 0.01);
+    assert.equal(shortPayment.body.excess_over_installment, 0);
+
+    const continuingPayment = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
+      token: tokens.cashier,
+      body: { amount: 1000 },
+    });
+    assert.equal(continuingPayment.status, 200);
+    assert.equal(continuingPayment.body.excess_over_installment, 259.99);
+    assert.ok(continuingPayment.body.allocations.some((allocation) => allocation.installment_number === 2));
+  });
+
+  test('payment preview identifies an amount greater than the full loan balance without writing', async () => {
+    const { loanId } = await activeLoan();
+    const res = await ctx.request('POST', `/api/loans/${loanId}/payments/preview`, {
+      token: tokens.cashier,
+      body: { amount: 999999 },
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.overpaid, true);
+    assert.equal(res.body.allocations.length, 0);
+    assert.equal(ctx.db.prepare('SELECT COUNT(*) AS c FROM loan_payments WHERE loan_id = ?').get(loanId).c, 0);
+  });
+
   test('non-collection expenses linked to a loan are rejected and never become repayment debt', async () => {
     const { loanId } = await activeLoan();
     const res = await ctx.request('POST', '/api/expenses', {
