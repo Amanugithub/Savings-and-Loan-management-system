@@ -16,7 +16,7 @@ const installmentsStmt = db.prepare(
 
 const collectionExpenseOwedStmt = db.prepare(
   `SELECT
-     COALESCE((SELECT SUM(amount) FROM expenses WHERE loan_id = ?), 0)
+     COALESCE((SELECT SUM(amount) FROM expenses WHERE loan_id = ? AND category = 'collection_expense'), 0)
      - COALESCE((SELECT SUM(amount) FROM loan_payment_allocations WHERE loan_id = ? AND bucket = 'collection_expense'), 0)
    AS owed`
 );
@@ -61,11 +61,13 @@ export function getOutstandingBalance(loan) {
 
   const collectionExpenses = Math.max(0, collectionExpenseOwedStmt.get(loan.id, loan.id).owed);
   const interestInsurance = installments.reduce(
-    (sum, row) => sum + (row.interest_due - row.interest_paid) + (row.insurance_due - row.insurance_paid),
+    (sum, row) => sum
+      + Math.max(0, row.interest_due - row.interest_paid)
+      + Math.max(0, row.insurance_due - row.insurance_paid),
     0
   );
   const penaltyOutstanding = penalties.reduce((sum, row) => sum + row.outstanding, 0);
-  const principal = installments.reduce((sum, row) => sum + (row.principal_due - row.principal_paid), 0);
+  const principal = installments.reduce((sum, row) => sum + Math.max(0, row.principal_due - row.principal_paid), 0);
 
   return {
     collection_expenses: roundMoney(collectionExpenses),
@@ -78,9 +80,12 @@ export function getOutstandingBalance(loan) {
 /**
  * Records a payment against a loan and allocates it across the Article 16
  * waterfall: collection expenses first, then interest/insurance/penalties
- * (oldest installment period first), then principal. The whole thing runs
- * as one atomic transaction — the payment row, every allocation row, and
- * every installment update commit together or none of them do.
+ * interest/insurance/penalties, then principal for each oldest installment
+ * before moving to the next installment. This keeps a normal monthly payment
+ * attached to one monthly installment instead of paying interest across the
+ * entire schedule before any principal. The whole thing runs as one atomic
+ * transaction — the payment row, every allocation row, and every installment
+ * update commit together or none of them do.
  *
  * Returns { overpaid: true, outstanding } without writing anything if
  * `amount` exceeds what's left on the loan — this release does not create
@@ -155,7 +160,9 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
     // Bucket 1: collection expenses charged to recovering this loan.
     allocate('collection_expense', outstanding.collection_expenses, null, null);
 
-    // Bucket 2: interest, insurance, and penalties — oldest period first.
+    // Buckets 2 and 3 are applied one installment at a time, oldest due
+    // installment first. A monthly payment therefore clears that month's
+    // interest/insurance/penalty and then its principal before moving on.
     const installments = installmentsStmt.all(loan.id);
     const patches = new Map(installments.map((row) => [row.id, { ...row }]));
     const penaltiesByPeriod = new Map(
@@ -187,11 +194,7 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
         const appliedPenalty = allocate('interest_penalty', penalty.outstanding, null, penalty.id);
         penalty.outstanding = roundMoney(penalty.outstanding - appliedPenalty);
       }
-    }
 
-    // Bucket 3: principal, oldest installment first.
-    for (const installment of installments) {
-      const patch = patches.get(installment.id);
       const appliedPrincipal = allocate(
         'principal',
         patch.principal_due - patch.principal_paid,
@@ -199,6 +202,10 @@ export function recordLoanPayment(loan, { amount, paymentDate, notes, recordedBy
         null
       );
       patch.principal_paid = roundMoney(patch.principal_paid + appliedPrincipal);
+    }
+
+    if (remaining > EPSILON) {
+      throw new Error('PAYMENT_ALLOCATION_MISMATCH');
     }
 
     const updatedInstallments = [];

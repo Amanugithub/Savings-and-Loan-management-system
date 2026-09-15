@@ -1,5 +1,5 @@
 -- Savings and Loan Management System — consolidated PostgreSQL schema
--- Final schema represented by the former PostgreSQL migrations 001–004.
+-- Final schema represented by the PostgreSQL migrations 001–006.
 -- Run this file against a new PostgreSQL/Supabase database.
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

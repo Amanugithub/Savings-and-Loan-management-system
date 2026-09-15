@@ -91,7 +91,7 @@ router.get(
       pool.query('SELECT * FROM loan_installments WHERE loan_id = $1 ORDER BY installment_number ASC', [loan.id]),
       pool.query('SELECT * FROM loan_penalties WHERE loan_id = $1 ORDER BY penalty_period ASC', [loan.id]),
       pool.query('SELECT * FROM loan_payments WHERE loan_id = $1 ORDER BY payment_date DESC, created_at DESC', [loan.id]),
-      pool.query('SELECT * FROM expenses WHERE loan_id = $1 ORDER BY date DESC, created_at DESC', [loan.id]),
+      pool.query("SELECT * FROM expenses WHERE loan_id = $1 AND category = 'collection_expense' ORDER BY date DESC, created_at DESC", [loan.id]),
     ]);
 
     const paymentIds = payments.map((payment) => payment.id);
@@ -283,7 +283,7 @@ router.post(
 
     const months = term_years * 12;
     const interest_rate = INTEREST_RATE_BY_TERM[term_years];
-    const monthly_installment = Math.round((principal / months) * 100) / 100;
+    const monthly_installment = Math.round((principal / months + principal * interest_rate / 100 / months + principal * 0.01 / months) * 100) / 100;
     const monthly_interest_amount = Math.round((principal * interest_rate / 100 / months) * 100) / 100;
     const insurance_amount = Math.round(principal * 0.01 * 100) / 100;
 

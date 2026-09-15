@@ -49,7 +49,7 @@ describe('payment waterfall', () => {
     const { loanId } = await activeLoan();
     await ctx.request('POST', '/api/expenses', {
       token: tokens.accountant,
-      body: { category: 'other', amount: 100, loan_id: loanId },
+      body: { category: 'collection_expense', amount: 100, loan_id: loanId },
     });
 
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
@@ -78,10 +78,9 @@ describe('payment waterfall', () => {
     assert.equal(res.body.installments[0].principal_paid, 0);
   });
 
-  test('the waterfall clears interest+insurance across the whole schedule before touching any principal', async () => {
+  test('a normal monthly payment clears one installment before moving to the next', async () => {
     const { loanId } = await activeLoan();
-    // 12 installments * (160 interest + 20 insurance) = 2160 exactly; the
-    // remaining 20 ETB is the only amount left for principal.
+    // One monthly payment is 2,000 principal + 160 interest + 20 insurance.
     const res = await ctx.request('POST', `/api/loans/${loanId}/payments`, {
       token: tokens.cashier,
       body: paymentBody({ amount: 2180 }),
@@ -90,8 +89,23 @@ describe('payment waterfall', () => {
 
     const principalAllocations = res.body.allocations.filter((a) => a.bucket === 'principal');
     assert.equal(principalAllocations.length, 1);
-    assert.equal(principalAllocations[0].amount, 20);
-    assert.equal(res.body.installments[11].interest_paid, 160, 'installment 12\'s interest is covered before any principal is touched');
+    assert.equal(principalAllocations[0].amount, 2000);
+    assert.equal(principalAllocations[0].installment_id, res.body.installments[0].id);
+    assert.equal(res.body.installments[0].interest_paid, 160);
+    assert.equal(res.body.installments[0].insurance_paid, 20);
+    assert.equal(res.body.installments[0].principal_paid, 2000);
+    assert.equal(res.body.installments[0].status, 'paid');
+    assert.equal(res.body.installments[1].interest_paid, 0, 'future installment interest must not be collected early');
+    assert.equal(res.body.installments[1].principal_paid, 0, 'future installment principal must not be collected early');
+  });
+
+  test('non-collection expenses linked to a loan are rejected and never become repayment debt', async () => {
+    const { loanId } = await activeLoan();
+    const res = await ctx.request('POST', '/api/expenses', {
+      token: tokens.accountant,
+      body: { category: 'other', amount: 100, loan_id: loanId },
+    });
+    assert.equal(res.status, 400);
   });
 
   test('overpayment is rejected with 409 and writes nothing', async () => {

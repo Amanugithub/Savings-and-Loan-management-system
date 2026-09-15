@@ -644,7 +644,12 @@ router.post(
 
     const monthly_installment =
       Math.round(
-        (principal / months + Number.EPSILON) * 100
+        (
+          principal / months +
+          principal * interest_rate / 100 / months +
+          principal * 0.01 / months +
+          Number.EPSILON
+        ) * 100
       ) / 100;
 
     const monthly_interest_amount =
@@ -1439,11 +1444,11 @@ router.patch(
  * Cashier only.
  *
  * Records a receipt-based payment against an active loan and allocates it
- * through the Article 16 waterfall: collection expenses, then interest +
- * insurance + penalties (oldest period first), then principal. Penalty
- * accrual (#48) runs first so the amount being collected reflects the
- * loan's current standing. Overpayment is rejected outright — this release
- * does not create unapplied credit.
+ * through the Article 16 waterfall: collection expenses first, then each
+ * oldest installment's interest + insurance + penalties and principal before
+ * moving to the next installment. Penalty accrual (#48) runs first so the
+ * amount being collected reflects the loan's current standing. Overpayment
+ * is rejected outright — this release does not create unapplied credit.
  */
 router.post(
   '/:id/payments',

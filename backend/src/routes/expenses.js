@@ -98,6 +98,12 @@ router.post(
     }
 
     if (loan_id !== undefined && loan_id !== null) {
+      if (category !== "collection_expense") {
+        return res.status(400).json({
+          error: "loan_id can only be used with collection expenses",
+        });
+      }
+
       const loan = db.prepare("SELECT id FROM loans WHERE id = ?").get(loan_id);
       if (!loan) {
         return res.status(400).json({

@@ -50,6 +50,7 @@ describe('loan status pipeline (self-secured, no guarantor)', () => {
     });
     assert.equal(apply.status, 201);
     assert.equal(apply.body.data.status, 'awaiting_recommendation');
+    assert.equal(apply.body.data.monthly_installment, 2180, 'monthly installment must include principal, interest, and insurance');
     const loanId = apply.body.data.id;
 
     const recommend = await ctx.request('PATCH', `/api/loans/${loanId}/recommend`, { token: tokens.chairperson });

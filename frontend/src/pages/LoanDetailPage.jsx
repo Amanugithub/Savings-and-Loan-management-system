@@ -121,7 +121,7 @@ function ScheduleAndPenalties({ loan }) {
   </section>
 }
 
-function RecordPaymentCard({ loanId }) {
+function RecordPaymentCard({ loan }) {
   const mutation = useRecordLoanPayment()
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState(todayGregorianIso())
@@ -132,7 +132,7 @@ function RecordPaymentCard({ loanId }) {
   const submit = (event) => {
     event.preventDefault()
     mutation.mutate(
-      { id: loanId, amount: Number(amount), date, notes: notes || undefined, idempotencyKey },
+      { id: loan.id, amount: Number(amount), date, notes: notes || undefined, idempotencyKey },
       {
         onSuccess: (result) => {
           setLastResult(result)
@@ -147,7 +147,7 @@ function RecordPaymentCard({ loanId }) {
   const bucketLabel = { collection_expense: "Collection expense", interest_penalty: "Interest / insurance / penalty", principal: "Principal" }
 
   return <Card>
-    <CardHeader><CardTitle className="flex items-center gap-2"><ReceiptText /> Record a payment</CardTitle><CardDescription>Allocated automatically: collection expenses, then interest/insurance/penalties, then principal.</CardDescription></CardHeader>
+    <CardHeader><CardTitle className="flex items-center gap-2"><ReceiptText /> Record a payment</CardTitle><CardDescription>Allocated to the oldest unpaid installment: collection expenses, then interest/insurance/penalties, then principal. Scheduled monthly payment: ETB {Number(loan.monthly_installment).toLocaleString()}.</CardDescription></CardHeader>
     <CardContent className="flex flex-col gap-4">
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-3">
         <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="payment-amount">Amount<Input id="payment-amount" type="number" min="0.01" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} required /></label>
@@ -294,7 +294,7 @@ function LoanDetailPage() {
     </section>
 
     {loan.status === "active" && <>
-      {canRecordPayment(role) && <RecordPaymentCard loanId={loan.id} />}
+      {canRecordPayment(role) && <RecordPaymentCard loan={loan} />}
       <ScheduleAndPenalties loan={loan} />
     </>}
   </main>
