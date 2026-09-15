@@ -326,7 +326,7 @@ CREATE UNIQUE INDEX uq_member_one_opening_shares
 CREATE TABLE expenses (
     id TEXT PRIMARY KEY,
     category TEXT NOT NULL CHECK (category IN (
-        'supplies', 'utilities', 'rent', 'maintenance', 'equipment', 'other'
+        'supplies', 'utilities', 'rent', 'maintenance', 'equipment', 'collection_expense', 'other'
     )),
     description TEXT,
     amount NUMERIC NOT NULL CHECK (amount > 0),

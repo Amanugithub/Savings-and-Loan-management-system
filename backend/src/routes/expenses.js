@@ -13,6 +13,7 @@ const ALLOWED_EXPENSE_CATEGORIES = [
   "rent",
   "maintenance",
   "equipment",
+  "collection_expense",
   "other",
 ];
 
@@ -103,6 +104,12 @@ router.post(
           error: "loan_id does not reference an existing loan",
         });
       }
+    }
+
+    if (category === "collection_expense" && !loan_id) {
+      return res.status(400).json({
+        error: "loan_id is required for collection expenses",
+      });
     }
 
     if (!ALLOWED_EXPENSE_CATEGORIES.includes(category)) {

@@ -72,7 +72,7 @@ function ScheduleAndPenalties({ loan }) {
   const schedule = loan.schedule ?? []
   const penalties = loan.penalties ?? []
 
-  return <section className="grid gap-6 lg:grid-cols-2">
+  return <section className="grid items-start gap-6 lg:grid-cols-2">
     <Card>
       <CardHeader><CardTitle>Repayment schedule</CardTitle><CardDescription>{schedule.length} installment{schedule.length === 1 ? "" : "s"}.</CardDescription></CardHeader>
       <CardContent className="p-0">
@@ -294,8 +294,8 @@ function LoanDetailPage() {
     </section>
 
     {loan.status === "active" && <>
-      <ScheduleAndPenalties loan={loan} />
       {canRecordPayment(role) && <RecordPaymentCard loanId={loan.id} />}
+      <ScheduleAndPenalties loan={loan} />
     </>}
   </main>
 }

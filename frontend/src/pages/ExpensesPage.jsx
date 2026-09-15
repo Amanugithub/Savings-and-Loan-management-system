@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useExpenses } from "@/hooks/use-expenses"
 import { formatEthiopianDate } from "@/lib/ethiopian-calendar"
 
-const categories = ["all", "supplies", "utilities", "rent", "maintenance", "equipment", "other"]
+const categories = ["all", "supplies", "utilities", "rent", "maintenance", "equipment", "collection_expense", "other"]
 
 function labelFor(value) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase())

@@ -414,6 +414,7 @@ CREATE TABLE expenses (
         'rent',
         'maintenance',
         'equipment',
+        'collection_expense',
         'other'
     )),
 
