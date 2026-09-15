@@ -6,6 +6,7 @@ import { translatedText } from "@/lib/language"
 
 const LanguageContext = createContext(null)
 const originalTextByNode = new WeakMap()
+const translatedTextByNode = new WeakMap()
 
 function getInitialLanguage() {
   const saved = window.localStorage.getItem("sacco-language")
@@ -20,9 +21,18 @@ function translateDocument(language) {
   let node
   while ((node = walker.nextNode())) {
     if (node.parentElement?.closest("script, style, [data-no-translate]")) continue
-    const original = originalTextByNode.get(node) || node.textContent
+
+    // React can update a text node in place (for example, when a select's
+    // value changes). If its current text is different from the last text we
+    // translated, it is new application content and must become the new
+    // translation source instead of being replaced with stale text.
+    const lastTranslated = translatedTextByNode.get(node)
+    const original = lastTranslated === undefined || node.textContent !== lastTranslated
+      ? node.textContent
+      : originalTextByNode.get(node)
     originalTextByNode.set(node, original)
     const translated = translatedText(original, language)
+    translatedTextByNode.set(node, translated)
     if (node.textContent !== translated) node.textContent = translated
   }
 

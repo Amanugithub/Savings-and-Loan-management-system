@@ -99,7 +99,7 @@ function AdministratorsPage() {
                 <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-name">Full name<Input id="admin-name" name="name" value={form.name} onChange={updateField} required /></label>
                 <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-username">Username<Input id="admin-username" name="username" value={form.username} onChange={updateField} required /></label>
                 <label className="flex flex-col gap-2 text-sm font-medium" htmlFor="admin-role">Role
-                  <Select value={form.role || undefined} onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}>
+                  <Select items={ROLES.map((role) => ({ value: role, label: ROLE_LABELS[role] }))} value={form.role || undefined} onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}>
                     <SelectTrigger id="admin-role" className="w-full"><SelectValue placeholder="Select a role" /></SelectTrigger>
                     <SelectContent><SelectGroup>{ROLES.map((role) => <SelectItem key={role} value={role}>{ROLE_LABELS[role]}</SelectItem>)}</SelectGroup></SelectContent>
                   </Select>
